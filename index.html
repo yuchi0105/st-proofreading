@@ -87,6 +87,49 @@
   .seg button[aria-pressed=true]{background:var(--ink);color:var(--leaf)}
   .box{background:var(--leaf);box-shadow:var(--shadow)}
 
+  /* ---------- entry detail: expandable ---------- */
+  .ent-wrap{border-bottom:1px solid var(--rule)}
+  .ent-wrap:last-child{border-bottom:0}
+  .ent-wrap .ent{border-bottom:0}
+  .tw{
+    flex:1;min-width:0;display:flex;align-items:center;gap:7px;
+    font:inherit;font-size:13.5px;color:inherit;text-align:left;
+    background:transparent;border:0;padding:0;cursor:pointer
+  }
+  .tw .caret{
+    flex:none;font-size:9px;color:var(--soft);
+    transition:transform .15s;display:inline-block
+  }
+  .tw[aria-expanded=true] .caret{transform:rotate(90deg)}
+  .tw[aria-expanded=true] .nm{font-weight:600}
+  .tw:hover .nm,.tw:hover .caret{color:var(--pen)}
+  .tw:focus-visible{outline:2px solid var(--pen);outline-offset:2px}
+
+  .ent-tools{display:flex;gap:14px;margin:0 0 9px}
+  .ent-tools button{
+    font:inherit;font-size:11.5px;letter-spacing:.04em;color:var(--soft);
+    background:transparent;border:0;padding:0;cursor:pointer;
+    border-bottom:1px solid var(--rule)
+  }
+  .ent-tools button:hover{color:var(--pen);border-bottom-color:var(--pen)}
+
+  .entd{padding:1px 13px 13px 32px;font-size:12.5px}
+  .entd-row{display:flex;gap:9px;padding:3px 0;align-items:baseline}
+  .entd-lab{flex:none;width:66px;color:var(--soft);font-size:11px;letter-spacing:.08em}
+  .entd-val{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:4px;align-items:baseline}
+  .entd-val .none{color:var(--soft)}
+  .chip{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;background:#fff;border:1px solid var(--rule);padding:1px 6px
+  }
+  .entd-meta{color:var(--soft);font-size:11.5px}
+  .entd-body{
+    margin:5px 0 0;padding:11px 13px;background:#fff;border:1px solid var(--rule);
+    max-height:340px;overflow:auto;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:12px;line-height:1.62;white-space:pre-wrap;word-break:break-word
+  }
+
   /* ---------- errata: the signature ---------- */
   .errata{list-style:none;margin:0;padding:0;counter-reset:e}
   .errata li{
@@ -209,6 +252,10 @@
     .ent{flex-wrap:wrap;gap:7px}
     .ent .why{max-width:100%;order:3;flex:1 1 100%}
     .errata li{padding-left:44px}
+    .tw{flex:1 1 100%}
+    .entd{padding-left:13px}
+    .entd-row{flex-wrap:wrap;gap:3px}
+    .entd-lab{flex:1 1 100%}
   }
 </style>
 </head>
@@ -242,8 +289,12 @@
     <h2><span class="n">02</span>條目分類</h2>
     <p class="h2sub">
       <b>資料</b>＝腳本讀取，名稱與鍵名必須維持簡體。<b>提示詞</b>＝AI 讀取，全部轉成繁體。
-      判斷結果不對可以直接改。
+      判斷結果不對可以直接改。點條目名稱可以展開看內容。
     </p>
+    <div class="ent-tools" id="enttools">
+      <button type="button" id="expandAll">全部展開</button>
+      <button type="button" id="collapseAll">全部收合</button>
+    </div>
     <div class="box" id="entries"></div>
   </section>
 
@@ -1355,7 +1406,7 @@ const FIXES_PRESET = [
 
 let S = {
   srcName: '', srcBuf: null, chunks: null, hadCcv3: false, isPng: false,
-  card: null, out: null, report: '', kinds: [],
+  card: null, out: null, report: '', kinds: [], open: new Set(),
 };
 
 /* ---------- OpenCC ---------- */
@@ -1399,7 +1450,7 @@ async function load(file) {
   try {
     S.srcName = file.name.replace(/\.(png|json)$/i, '');
     const buf = await file.arrayBuffer();
-    S.wb = null; S.uids = null; S.preset = null;
+    S.wb = null; S.uids = null; S.preset = null; S.open = new Set();
     if (/\.png$/i.test(file.name)) {
       const r = extractCard(buf);
       S.card = r.card; S.chunks = r.chunks; S.hadCcv3 = r.hadCcv3; S.isPng = true;
@@ -1483,23 +1534,86 @@ function renderMetaPreset() {
 }
 
 /* ---------- 條目分類 ---------- */
+/** 關鍵字欄位在 v2 規格與 ST 世界書之間名稱不同，兩種都收。 */
+function keyList(e, secondary) {
+  const raw = secondary ? (e.secondary_keys ?? e.keysecondary) : (e.keys ?? e.key);
+  if (!raw) return [];
+  const arr = Array.isArray(raw) ? raw : String(raw).split(',');
+  return arr.map(s => String(s).trim()).filter(Boolean);
+}
+
+/** 展開後顯示的條目細節。只有展開中的條目才會產生這段 HTML。 */
+function entryDetail(e) {
+  const chips = a => a.length
+    ? a.map(k => `<code class="chip">${esc(k)}</code>`).join('')
+    : '<span class="none">（無）</span>';
+  const k2 = keyList(e, true);
+  const content = e.content == null ? '' : String(e.content);
+
+  const bits = [];
+  if (e.constant) bits.push('常駐');
+  if (e.disable || e.enabled === false) bits.push('已停用');
+  if (e.selective) bits.push('選擇性');
+  if (e.case_sensitive) bits.push('區分大小寫');
+  const pos = e.position ?? e.extensions?.position;
+  if (pos !== undefined && pos !== null && pos !== '') bits.push('位置 ' + pos);
+  const depth = e.depth ?? e.extensions?.depth;
+  if (depth !== undefined && depth !== null) bits.push('深度 ' + depth);
+  const order = e.insertion_order ?? e.order;
+  if (order !== undefined && order !== null) bits.push('順序 ' + order);
+
+  const rows = [
+    ['關鍵字', chips(keyList(e))],
+    k2.length ? ['次要關鍵字', chips(k2)] : null,
+    bits.length ? ['屬性', `<span class="entd-meta">${esc(bits.join('・'))}</span>`] : null,
+    ['內容', `<span class="entd-meta">${content.length} 字元・${content ? content.split('\n').length : 0} 行</span>`],
+  ].filter(Boolean);
+
+  return rows.map(([lab, val]) =>
+      `<div class="entd-row"><span class="entd-lab">${lab}</span><span class="entd-val">${val}</span></div>`).join('')
+    + `<pre class="entd-body">${content ? esc(content) : '（空白）'}</pre>`;
+}
+
 function renderEntries() {
   const es = entriesOf();
+  $('#enttools').classList.toggle('hidden', !es.length);
   if (!es.length) { $('#entries').innerHTML = '<div class="ent"><span class="nm">這個檔案沒有世界書條目。</span></div>'; return; }
   $('#entries').innerHTML = es.map((e, i) => {
     const why = classifyEntry(e).reason;
-    return `<div class="ent">
-      <span class="nm">${esc(e.comment || '（無名稱）')}</span>
+    const open = S.open.has(i);
+    return `<div class="ent-wrap"><div class="ent">
+      <button type="button" class="tw" data-x="${i}" aria-expanded="${open}" aria-controls="entd-${i}">
+        <span class="caret" aria-hidden="true">▶</span>
+        <span class="nm">${esc(e.comment || '（無名稱）')}</span>
+      </button>
       <span class="why">${esc(why)}</span>
       <span class="seg" role="group">
         <button data-i="${i}" data-k="data"   aria-pressed="${S.kinds[i] === 'data'}">資料</button>
         <button data-i="${i}" data-k="prompt" aria-pressed="${S.kinds[i] !== 'data'}">提示詞</button>
-      </span></div>`;
+      </span></div>
+      <div class="entd" id="entd-${i}" ${open ? '' : 'hidden'}>${open ? entryDetail(e) : ''}</div>
+    </div>`;
   }).join('');
-  $('#entries').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+  $('#entries').querySelectorAll('button[data-k]').forEach(b => b.addEventListener('click', () => {
     S.kinds[+b.dataset.i] = b.dataset.k;
     renderEntries(); renderReport(); renderMeta(); renderFixes();
   }));
+  $('#entries').querySelectorAll('button.tw').forEach(b => b.addEventListener('click', () => {
+    const i = +b.dataset.x;
+    if (S.open.has(i)) S.open.delete(i); else S.open.add(i);
+    renderEntries();
+  }));
+}
+
+function bindEntryTools() {
+  $('#expandAll').addEventListener('click', () => {
+    S.open = new Set(entriesOf().map((_, i) => i));
+    renderEntries();
+  });
+  $('#collapseAll').addEventListener('click', () => {
+    S.open = new Set();
+    renderEntries();
+  });
 }
 
 /* ---------- 校對報告 ---------- */
@@ -1783,7 +1897,7 @@ function bindExports() {
   $('#reset').addEventListener('click', () => { S.out = null; $('#file').value = ''; $('#file').click(); });
 }
 
-bindDrop(); bindExports();
+bindDrop(); bindExports(); bindEntryTools();
 </script>
 <!-- ============================================================
      OPENCC-BUNDLE:BEGIN
