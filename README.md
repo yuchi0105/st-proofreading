@@ -6,6 +6,11 @@
 
 **線上使用：** https://yuchi0105.github.io/st-proofreading/
 
+> ⚠️ 個人自製的非官方工具，與 SillyTavern 官方、各轉換器作者及任何角色卡作者均無關聯。
+> 轉換結果請自行確認後再使用，並記得先備份原卡。
+
+Made by **YUCHI**
+
 ## 功能
 
 - 支援角色卡 PNG／JSON、世界書 JSON、預設 JSON

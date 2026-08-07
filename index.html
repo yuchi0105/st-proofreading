@@ -191,6 +191,17 @@
   .log .mono{font-size:11.5px;color:var(--soft)}
 
   footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--rule);font-size:12px;color:var(--soft)}
+  footer p{margin:0 0 6px}
+  .byline{
+    margin-top:13px;padding-top:12px;border-top:1px dotted var(--rule);
+    display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap
+  }
+  .sig{
+    font-family:"Songti TC","Noto Serif TC","Source Han Serif TC",Georgia,serif;
+    font-size:13px;letter-spacing:.04em
+  }
+  .sig b{color:var(--pen);font-weight:600;letter-spacing:.08em}
+  .unofficial{font-size:11px;letter-spacing:.16em;text-transform:uppercase}
   .hidden{display:none !important}
   @media (prefers-reduced-motion:reduce){*{transition:none !important}}
   @media (max-width:560px){
@@ -205,7 +216,7 @@
 <div class="wrap">
 
 <header>
-  <div class="eyebrow">本機處理・檔案不會上傳</div>
+  <div class="eyebrow">非官方工具・本機處理・檔案不會上傳</div>
   <h1>酒館卡片校對台</h1>
   <p class="lede">
     繁化角色卡時，轉換器會把<b>程式要讀的字串</b>一起改掉 —— 世界書條目名稱、<span class="mono">key=value</span> 設定鍵、腳本按鈕名。
@@ -282,7 +293,12 @@
 </div>
 
 <footer>
-  校對台不會連線傳送你的檔案。繁簡轉換使用內建的 OpenCC 詞庫，全程離線運作，不需要網路。
+  <p>校對台不會連線傳送你的檔案。繁簡轉換使用內建的 OpenCC 詞庫，全程離線運作，不需要網路。</p>
+  <p>本工具由個人自製，與 SillyTavern 官方、各轉換器作者及任何角色卡作者均無關聯。轉換結果請自行確認後再使用，並記得先備份原卡。</p>
+  <div class="byline">
+    <span class="sig">Made by <b>YUCHI</b></span>
+    <span class="unofficial">Unofficial fan-made tool</span>
+  </div>
 </footer>
 </div>
 
