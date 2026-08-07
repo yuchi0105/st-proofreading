@@ -1,0 +1,1770 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>酒館卡片校對台 — 安全繁化與條目驗證</title>
+<style>
+  :root{
+    --paper:#e7e9e5;
+    --leaf:#f7f8f5;
+    --ink:#1b211f;
+    --soft:#6c7873;
+    --rule:#c9cec8;
+    --pen:#a8362b;
+    --pass:#2c6552;
+    --amber:#8a6512;
+    --shadow:0 1px 0 rgba(27,33,31,.06), 0 8px 24px -18px rgba(27,33,31,.5);
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;padding:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    font-size:15px;line-height:1.65;
+  }
+  .wrap{max-width:860px;margin:0 auto;padding:34px 18px 90px}
+  .serif{font-family:"Songti TC","Noto Serif TC","Source Han Serif TC",Georgia,"Times New Roman",serif}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+  /* ---------- header ---------- */
+  header{border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:26px}
+  .eyebrow{
+    font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--soft);margin-bottom:10px
+  }
+  h1{
+    font-family:"Songti TC","Noto Serif TC",Georgia,serif;
+    font-size:30px;line-height:1.25;margin:0 0 10px;font-weight:600;letter-spacing:.02em
+  }
+  .lede{color:var(--soft);font-size:14px;max-width:60ch;margin:0}
+  .lede b{color:var(--ink);font-weight:600}
+
+  /* ---------- drop zone: paste-up box ---------- */
+  .drop{
+    margin:0 0 26px;padding:34px 20px;text-align:center;
+    background:var(--leaf);border:1.5px dashed var(--rule);cursor:pointer;
+    transition:border-color .15s,background .15s
+  }
+  .drop:hover,.drop.over{border-color:var(--pen);background:#fff}
+  .drop.over{border-style:solid}
+  .drop-t{font-size:16px;font-weight:600;margin-bottom:5px}
+  .drop-s{font-size:12.5px;color:var(--soft)}
+  .drop:focus-visible{outline:2px solid var(--pen);outline-offset:3px}
+  input[type=file]{display:none}
+
+  /* ---------- sections ---------- */
+  section{margin:0 0 30px}
+  h2{
+    font-family:"Songti TC","Noto Serif TC",Georgia,serif;
+    font-size:13px;letter-spacing:.16em;margin:0 0 3px;font-weight:600;
+    display:flex;align-items:baseline;gap:10px
+  }
+  h2 .n{color:var(--pen);font-size:11px;letter-spacing:.05em}
+  .h2sub{font-size:12.5px;color:var(--soft);margin:0 0 14px;padding-bottom:9px;border-bottom:1px solid var(--rule)}
+
+  /* ---------- summary ---------- */
+  .meta{display:flex;flex-wrap:wrap;gap:0;background:var(--leaf);box-shadow:var(--shadow)}
+  .meta div{flex:1 1 120px;padding:13px 15px;border-right:1px solid var(--rule)}
+  .meta div:last-child{border-right:0}
+  .meta dt{font-size:11px;letter-spacing:.1em;color:var(--soft);margin-bottom:3px}
+  .meta dd{margin:0;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+  .meta dd.sm{font-size:15px;font-weight:600}
+
+  /* ---------- entry classification ---------- */
+  .ent{
+    display:flex;align-items:center;gap:12px;padding:9px 13px;
+    background:var(--leaf);border-bottom:1px solid var(--rule);font-size:13.5px
+  }
+  .ent:last-child{border-bottom:0}
+  .ent .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ent .why{color:var(--soft);font-size:11.5px;flex:none;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .seg{display:flex;flex:none;border:1px solid var(--rule);background:#fff}
+  .seg button{
+    font:inherit;font-size:11.5px;padding:4px 9px;border:0;background:transparent;
+    color:var(--soft);cursor:pointer;letter-spacing:.04em
+  }
+  .seg button[aria-pressed=true]{background:var(--ink);color:var(--leaf)}
+  .box{background:var(--leaf);box-shadow:var(--shadow)}
+
+  /* ---------- errata: the signature ---------- */
+  .errata{list-style:none;margin:0;padding:0;counter-reset:e}
+  .errata li{
+    counter-increment:e;position:relative;
+    padding:16px 16px 16px 52px;background:var(--leaf);
+    border-left:3px solid var(--rule);margin-bottom:8px;box-shadow:var(--shadow)
+  }
+  .errata li::before{
+    content:counter(e,decimal-leading-zero);
+    position:absolute;left:15px;top:16px;
+    font-family:ui-monospace,monospace;font-size:12px;color:var(--soft)
+  }
+  .errata li.error{border-left-color:var(--pen)}
+  .errata li.warn{border-left-color:var(--amber)}
+  .errata li.info{border-left-color:var(--rule)}
+  .errata .tt{font-weight:600;font-size:14.5px;margin-bottom:5px}
+  .errata .dd{font-size:13px;color:#3d4a45}
+  .tag{
+    display:inline-block;font-size:10.5px;letter-spacing:.1em;padding:1px 6px;
+    margin-left:8px;vertical-align:1.5px;border:1px solid currentColor
+  }
+  .error .tag{color:var(--pen)} .warn .tag{color:var(--amber)} .info .tag{color:var(--soft)}
+
+  /* glyph diff */
+  .diff{margin-top:11px;display:flex;flex-wrap:wrap;gap:7px 16px}
+  .pair{
+    font-family:"Songti TC","Noto Serif TC",Georgia,serif;font-size:19px;
+    display:flex;align-items:baseline;gap:9px;line-height:1.3
+  }
+  .pair .from{color:var(--pen);text-decoration:line-through;text-decoration-thickness:1.5px}
+  .pair .arw{font-size:12px;color:var(--soft)}
+  .pair .to{color:var(--pass)}
+
+  .clean{
+    padding:22px 18px;background:var(--leaf);box-shadow:var(--shadow);
+    border-left:3px solid var(--pass);font-size:14px
+  }
+  .clean b{color:var(--pass)}
+
+  /* ---------- controls ---------- */
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+  label.ck{display:flex;gap:9px;align-items:flex-start;padding:10px 13px;background:var(--leaf);
+    border-bottom:1px solid var(--rule);font-size:13.5px;cursor:pointer}
+  label.ck:last-child{border-bottom:0}
+  label.ck input{margin:4px 0 0;flex:none;accent-color:var(--pen);width:16px;height:16px}
+  label.ck span small{display:block;color:var(--soft);font-size:11.5px;line-height:1.5}
+  select{
+    font:inherit;font-size:14px;padding:9px 11px;background:#fff;color:var(--ink);
+    border:1px solid var(--rule);width:100%;max-width:420px
+  }
+  .warnbox{
+    border-left:3px solid var(--amber);background:#faf6ec;padding:11px 14px;
+    font-size:12.5px;margin:12px 0
+  }
+  .warnbox b{color:var(--amber)}
+
+  button.act{
+    font:inherit;font-size:14px;font-weight:600;letter-spacing:.06em;
+    padding:13px 24px;border:0;cursor:pointer;background:var(--ink);color:var(--leaf)
+  }
+  button.act.primary{background:var(--pen)}
+  button.act:disabled{background:var(--rule);color:#8d968f;cursor:default}
+  button.act:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+
+  .kindtag{font-size:11px;letter-spacing:.1em;color:var(--leaf);background:var(--ink);padding:2px 8px;font-weight:400}
+
+  .snip{
+    margin-top:8px;padding:7px 9px;background:#fff;border:1px solid var(--rule);
+    font-size:11px;color:#4a5854;word-break:break-all;line-height:1.5
+  }
+  .remote{
+    background:#faf6ec;border-left:3px solid var(--amber);padding:14px 16px;
+    margin-bottom:10px;box-shadow:var(--shadow)
+  }
+  .remote .tt{font-weight:600;font-size:14.5px;margin-bottom:5px;color:var(--amber)}
+  .remote .dd{font-size:13px;color:#3d4a45}
+  .urls{list-style:none;margin:10px 0 0;padding:0}
+  .urls li{background:#fff;border:1px solid var(--rule);padding:7px 9px;margin-bottom:4px;font-size:11px;word-break:break-all}
+  .urls em{display:block;font-style:normal;color:var(--soft);font-size:11px;margin-top:3px}
+  .hosts{margin-top:14px;background:var(--leaf);padding:13px 15px;box-shadow:var(--shadow)}
+  .hosts .tt{font-size:12px;letter-spacing:.1em;color:var(--soft);margin-bottom:8px}
+  .hosts .host{
+    display:flex;justify-content:space-between;gap:12px;padding:5px 0;
+    border-bottom:1px dotted var(--rule);font-size:12.5px
+  }
+  .hosts .host:last-of-type{border-bottom:0}
+  .hosts .host.unk span:last-child{color:var(--pen)}
+  .hosts .dd{font-size:11.5px;color:var(--soft)}
+
+  .typos{background:#fff;border-bottom:1px solid var(--rule);padding:4px 13px 8px 40px}
+  .tp{display:flex;align-items:center;gap:10px;padding:5px 0;font-size:13px;cursor:pointer}
+  .tp input{accent-color:var(--pen);width:15px;height:15px;flex:none}
+  .tp .pair{font-size:16px}
+  .tp em{color:var(--soft);font-size:11.5px;font-style:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .log{
+    margin-top:14px;background:var(--leaf);box-shadow:var(--shadow);
+    padding:13px 15px;font-size:12.5px;max-height:230px;overflow:auto
+  }
+  .log div{padding:2px 0;border-bottom:1px dotted var(--rule)}
+  .log div:last-child{border-bottom:0}
+  .log .mono{font-size:11.5px;color:var(--soft)}
+
+  footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--rule);font-size:12px;color:var(--soft)}
+  .hidden{display:none !important}
+  @media (prefers-reduced-motion:reduce){*{transition:none !important}}
+  @media (max-width:560px){
+    h1{font-size:24px}
+    .ent{flex-wrap:wrap;gap:7px}
+    .ent .why{max-width:100%;order:3;flex:1 1 100%}
+    .errata li{padding-left:44px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">本機處理・檔案不會上傳</div>
+  <h1>酒館卡片校對台</h1>
+  <p class="lede">
+    繁化角色卡時，轉換器會把<b>程式要讀的字串</b>一起改掉 —— 世界書條目名稱、<span class="mono">key=value</span> 設定鍵、腳本按鈕名。
+    這類失敗不會報錯，只會表現成「功能時好時壞」。校對台會先把它們標記保護，再進行轉換；已經壞掉的卡也能直接診斷修復。
+  </p>
+</header>
+
+<div class="drop" id="drop" role="button" tabindex="0" aria-label="選擇角色卡檔案">
+  <div class="drop-t">拖入角色卡，或點此選擇</div>
+  <div class="drop-s">角色卡 PNG／JSON・世界書 JSON・預設 JSON</div>
+  <input type="file" id="file" accept=".png,.json">
+</div>
+
+<div id="app" class="hidden">
+
+  <section>
+    <h2><span class="n">01</span>檔案概要<span class="kindtag" id="kindtag"></span></h2>
+    <p class="h2sub">先確認讀到的內容正確。</p>
+    <div class="meta" id="meta"></div>
+  </section>
+
+  <section id="entsec">
+    <h2><span class="n">02</span>條目分類</h2>
+    <p class="h2sub">
+      <b>資料</b>＝腳本讀取，名稱與鍵名必須維持簡體。<b>提示詞</b>＝AI 讀取，全部轉成繁體。
+      判斷結果不對可以直接改。
+    </p>
+    <div class="box" id="entries"></div>
+  </section>
+
+  <section>
+    <h2><span class="n">03</span>校對報告</h2>
+    <p class="h2sub" id="reportsub"></p>
+    <div id="report"></div>
+  </section>
+
+  <section>
+    <h2><span class="n">04</span>風險稽核</h2>
+    <p class="h2sub" id="auditsub"></p>
+    <div id="audit"></div>
+  </section>
+
+  <section>
+    <h2><span class="n">05</span>修正與轉換</h2>
+    <p class="h2sub">勾選要套用的修正，選擇轉換方向。</p>
+    <div class="box" id="fixes"></div>
+    <div class="row" style="margin-top:16px">
+      <select id="dir" aria-label="轉換方向"></select>
+    </div>
+    <div class="warnbox" id="dirnote"></div>
+    <label class="ck" style="background:var(--leaf);box-shadow:var(--shadow)">
+      <input type="checkbox" id="doRegex">
+      <span>一併轉換正則表達式
+        <small>正則要跟 AI 輸出一致，通常該轉。但 replaceString 裡常含 HTML/CSS/JS，轉換後請自行檢查一次。</small>
+      </span>
+    </label>
+    <div class="row" style="margin-top:18px">
+      <button class="act primary" id="run">套用</button>
+      <button class="act" id="reset">重新載入檔案</button>
+    </div>
+    <div class="log hidden" id="log"></div>
+  </section>
+
+  <section id="outsec" class="hidden">
+    <h2><span class="n">06</span>匯出</h2>
+    <p class="h2sub">匯入前建議先備份原卡，方便對照。</p>
+    <div class="row">
+      <button class="act" id="dlPng">下載 PNG</button>
+      <button class="act" id="dlJson">下載 JSON</button>
+      <button class="act" id="dlRep">下載校對報告</button>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  校對台不會連線傳送你的檔案。繁簡轉換使用 OpenCC 詞庫，首次使用需要網路載入一次。
+</footer>
+</div>
+
+<script>/* ============================================================
+   ST 卡片安全繁化 — 核心邏輯
+   ============================================================ */
+
+/* ---------- 詞庫：以「正確的簡體形式」為準 ----------
+   繁體變體不手動列舉，改由 OpenCC 反向生成（見 buildReverseIndex）。
+   這樣任何轉換模式產生的中間態都能被還原，包含只轉了一半的。      */
+const LEXICON = {
+  entryNames: ['手机-角色', '手机-表情包', '手机-基本设置', '手机-随机头像'],
+  keys: ['类型', '备注', '头像', '头像框', '昵称', '字体颜色', '气泡颜色', '输入框颜色',
+         '世界书版本', '外框颜色', '内框颜色', '侧边按钮', '自动显示', '自动隐藏',
+         '发送模式', '导航按键', '背景', '排序'],
+  sections: ['基本设置'],
+  buttons: ['手机显隐切换', '重新处理所有消息'],
+  // 這些鍵的「值」也是程式比對用的，不可轉換
+  machineValueKeys: ['类型', '发送模式', '自动显示', '自动隐藏', '导航按键', '世界书版本', '排序'],
+};
+
+/* 反查表：任何繁體變體 -> 正確簡體。由 OpenCC 於執行時填入。 */
+const REV = { entryNames: new Map(), keys: new Map(), sections: new Map(), buttons: new Map() };
+let revBuilt = false;
+
+/** 用 OpenCC 把詞庫的每個字串跑過所有轉換模式，建立反查表。 */
+let NORM = null;   // 繁→簡正規化：用來比對「同一個字串的不同繁簡寫法」
+function buildReverseIndex(OpenCC) {
+  if (revBuilt) return;
+  try { NORM = OpenCC.Converter({ from: 'tw', to: 'cn' }); } catch (_) {}
+  const modes = ['tw', 'twp', 't', 'hk'];
+  const convs = [];
+  for (const to of modes) {
+    try { convs.push(OpenCC.Converter({ from: 'cn', to })); } catch (_) {}
+  }
+  for (const group of ['entryNames', 'keys', 'sections', 'buttons']) {
+    for (const simp of LEXICON[group]) {
+      REV[group].set(simp, simp);
+      for (const c of convs) {
+        const t = c(simp);
+        if (t !== simp) REV[group].set(t, simp);
+      }
+    }
+  }
+  // machineValueKeys 也要涵蓋繁體寫法
+  const extra = new Set(LEXICON.machineValueKeys);
+  for (const k of LEXICON.machineValueKeys)
+    for (const c of convs) extra.add(c(k));
+  LEXICON.machineValueKeysAll = [...extra];
+  revBuilt = true;
+}
+
+/** 沒有 OpenCC 時的後備：至少涵蓋實測遇過的形式。 */
+const FALLBACK = {
+  entryNames: { '手機-角色': '手机-角色', '手機-表情包': '手机-表情包',
+    '手機-基本設定': '手机-基本设置', '手機-基本設置': '手机-基本设置',
+    '手機-隨機頭貼': '手机-随机头像', '手機-隨機頭像': '手机-随机头像' },
+  keys: { '型別': '类型', '類型': '类型', '備註': '备注', '頭貼': '头像', '頭像': '头像',
+    '頭像框': '头像框', '暱稱': '昵称', '字型顏色': '字体颜色', '字體顏色': '字体颜色',
+    '氣泡顏色': '气泡颜色', '輸入框顏色': '输入框颜色', '世界書版本': '世界书版本',
+    '外框顏色': '外框颜色', '內框顏色': '内框颜色', '側邊按鈕': '侧边按钮',
+    '自動顯示': '自动显示', '自動隱藏': '自动隐藏', '傳送模式': '发送模式',
+    '發送模式': '发送模式', '導航按鍵': '导航按键', '排序': '排序' },
+  sections: { '基本設定': '基本设置', '基本設置': '基本设置' },
+  buttons: { '手機顯隱切換': '手机显隐切换', '重新處理所有訊息': '重新处理所有消息',
+    '重新處理所有消息': '重新处理所有消息' },
+};
+
+/** 把字串正規化成簡體，用來判斷兩個字串是不是同一個詞的繁簡變體。 */
+function sameWord(a, b) {
+  if (a === b) return true;
+  if (!NORM || !a || !b) return false;
+  return NORM(a) === NORM(b);
+}
+
+/** 查詢：繁體變體 -> 正確簡體，查不到回 null。 */
+function canon(group, word) {
+  if (!word) return null;
+  const m = REV[group].get(word);
+  if (m && m !== word) return m;
+  if (m === word) return null;                       // 本來就是簡體
+  const f = FALLBACK[group][word];
+  return f && f !== word ? f : null;
+}
+
+function isMachineValueKey(key) {
+  const list = LEXICON.machineValueKeysAll || LEXICON.machineValueKeys;
+  if (list.includes(key)) return true;
+  const c = canon('keys', key);
+  return !!c && LEXICON.machineValueKeys.includes(c);
+}
+
+/* ---------- PNG 讀寫 ---------- */
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(bytes) {
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function b64ToBytes(b64) {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function bytesToB64(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+const latin1 = bytes => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return s; };
+
+function readPngChunks(buf) {
+  const b = new Uint8Array(buf);
+  const dv = new DataView(buf);
+  const chunks = [];
+  let i = 8;
+  while (i < b.length) {
+    const len = dv.getUint32(i);
+    const type = latin1(b.subarray(i + 4, i + 8));
+    chunks.push({ type, data: b.subarray(i + 8, i + 8 + len) });
+    i += 12 + len;
+  }
+  return chunks;
+}
+
+/** 從 PNG 取出角色卡 JSON。優先 ccv3，其次 chara。 */
+function extractCard(buf) {
+  const chunks = readPngChunks(buf);
+  let chara = null, ccv3 = null;
+  for (const c of chunks) {
+    if (c.type !== 'tEXt') continue;
+    const s = latin1(c.data);
+    const z = s.indexOf('\0');
+    const key = s.slice(0, z), val = s.slice(z + 1);
+    if (key === 'chara') chara = val;
+    if (key === 'ccv3') ccv3 = val;
+  }
+  const pick = ccv3 || chara;
+  if (!pick) throw new Error('這個 PNG 裡沒有角色卡資料（找不到 chara / ccv3 區塊）。');
+  const json = new TextDecoder().decode(b64ToBytes(pick));
+  return { card: JSON.parse(json), hadCcv3: !!ccv3, chunks };
+}
+
+/** 把新的 JSON 寫回 PNG，保留其他所有區塊。 */
+function buildPng(chunks, card, hadCcv3) {
+  const b64 = bytesToB64(new TextEncoder().encode(JSON.stringify(card)));
+  const mk = (type, dataStr) => {
+    const head = new TextEncoder().encode(type);
+    const body = new Uint8Array(dataStr.length);
+    for (let i = 0; i < dataStr.length; i++) body[i] = dataStr.charCodeAt(i) & 0xff;
+    const payload = new Uint8Array(head.length + body.length);
+    payload.set(head, 0); payload.set(body, head.length);
+    const out = new Uint8Array(4 + payload.length + 4);
+    new DataView(out.buffer).setUint32(0, body.length);
+    out.set(payload, 4);
+    new DataView(out.buffer).setUint32(4 + payload.length, crc32(payload));
+    return out;
+  };
+
+  const parts = [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])];
+  for (const c of chunks) {
+    if (c.type === 'tEXt') {
+      const s = latin1(c.data);
+      const key = s.slice(0, s.indexOf('\0'));
+      if (key === 'chara') { parts.push(mk('tEXt', 'chara\0' + b64)); continue; }
+      if (key === 'ccv3') { parts.push(mk('tEXt', 'ccv3\0' + b64)); continue; }
+    }
+    parts.push(mk(c.type, latin1(c.data)));
+  }
+  if (!hadCcv3) { /* 只有 chara 就維持原樣，不額外新增 */ }
+
+  let total = 0; parts.forEach(p => total += p.length);
+  const out = new Uint8Array(total);
+  let o = 0; parts.forEach(p => { out.set(p, o); o += p.length; });
+  return out;
+}
+
+/* ---------- 條目分類 ---------- */
+const RE_KV = /^\s*([^\s=\[\]]{1,16})\s*=(.*)$/;
+const RE_STICKER = /^(.+?)--(.*)$/;
+const RE_SECTION = /^\s*\[(.+)\]\s*$/;
+
+/** 判斷世界書條目是否為「程式讀取的資料條目」 */
+function classifyEntry(entry) {
+  const name = entry.comment || '';
+  const content = entry.content || '';
+  const lines = content.split('\n').map(s => s.trim()).filter(Boolean);
+  const kv = lines.filter(l => RE_KV.test(l) && !RE_SECTION.test(l)).length;
+  const st = lines.filter(l => RE_STICKER.test(l) && !RE_KV.test(l)).length;
+  const urlOnly = lines.filter(l => /^https?:\/\/\S+$/.test(l)).length;
+
+  if (/^手[机機]\s*-/.test(name)) {
+    // 給 AI 讀的提示詞條目要排除
+    if (/格式|發給|发给|列表.*Ai|Ai.*列表/i.test(name) && kv === 0 && st === 0) {
+      return { kind: 'prompt', reason: '名稱含「格式／發給Ai」，內容不是 key=value' };
+    }
+    return { kind: 'data', reason: '名稱以「手機-」開頭' };
+  }
+  if (kv >= 3) return { kind: 'data', reason: `含 ${kv} 行 key=value` };
+  if (st >= 5) return { kind: 'data', reason: `含 ${st} 行「名稱--網址」` };
+  if (urlOnly >= 5) return { kind: 'data', reason: `含 ${urlOnly} 行純網址` };
+  return { kind: 'prompt', reason: '' };
+}
+
+/* ---------- 保護式轉換 ---------- */
+const PUA = i => '\uE000' + i + '\uE001';
+
+/** 用哨兵字元包住不可轉換的片段，轉換後還原。 */
+function protectedConvert(text, convert, protectors) {
+  if (!text) return text;
+  const store = [];
+  let work = text;
+  for (const re of protectors) {
+    work = work.replace(re, m => { store.push(m); return PUA(store.length - 1); });
+  }
+  work = convert(work);
+  // 哨兵可能被轉換器改動數字以外的部分，故用寬鬆比對還原
+  work = work.replace(/\uE000(\d+)\uE001/g, (_, n) => store[+n] ?? '');
+  return work;
+}
+
+const P_URL = /https?:\/\/[^\s"'<>）)，,]+/g;
+const P_HEX = /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g;
+const P_TAG = /\{\{[^}]*\}\}|<\/?[A-Za-z][\w:-]*[^>]*>/g;
+const P_BRACKET = /\[(?:bqb|zz|yy|music|img)-[^\]]*\]/g;
+
+/** 資料條目的內容：逐行處理 */
+function convertDataContent(text, convert) {
+  return text.split('\n').map(line => {
+    const mSec = line.match(RE_SECTION);
+    if (mSec) return '[' + convert(mSec[1]) + ']';        // 聯絡人名 → 要跟 AI 一致
+
+    const mKv = line.match(RE_KV);
+    if (mKv) {
+      const key = mKv[1], val = mKv[2];
+      const keepVal = isMachineValueKey(key)
+        || /^\s*(https?:\/\/|#[0-9a-fA-F]{3,8}|rgba?\(|true|false|-?\d+(\.\d+)?\s*$)/.test(val);
+      return key + '=' + (keepVal ? val : protectedConvert(val, convert, [P_URL, P_HEX]));
+    }
+
+    const mSt = line.match(RE_STICKER);
+    if (mSt && !/^#/.test(line)) {
+      return convert(mSt[1]) + '--' + mSt[2];              // 名稱轉、網址不動
+    }
+    if (/^https?:\/\//.test(line.trim())) return line;     // 純網址
+    return protectedConvert(line, convert, [P_URL, P_HEX]);
+  }).join('\n');
+}
+
+/** 一般提示詞文字 */
+function convertPrompt(text, convert) {
+  return protectedConvert(text, convert, [P_URL, P_HEX, P_BRACKET, P_TAG]);
+}
+
+/**
+ * 主轉換。opts = { convert, doRegex }
+ * 回傳 { card, changed: [{where, before, after}] }
+ */
+function convertCard(cardIn, opts) {
+  const card = JSON.parse(JSON.stringify(cardIn));
+  const convert = opts.convert;
+  const kindOf = opts.kindOf || ((e, i) => classifyEntry(e).kind);
+  const changed = [];
+  const note = (where, before, after) => { if (before !== after) changed.push({ where, before, after }); };
+
+  const data = card.data || card;
+  const PLAIN = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example',
+                 'system_prompt', 'post_history_instructions', 'creator_notes', 'creator'];
+
+  for (const obj of [card, card.data].filter(Boolean)) {
+    for (const k of PLAIN) {
+      if (typeof obj[k] === 'string' && obj[k]) {
+        const v = convertPrompt(obj[k], convert);
+        note(k, obj[k], v); obj[k] = v;
+      }
+    }
+    if (Array.isArray(obj.alternate_greetings)) {
+      obj.alternate_greetings = obj.alternate_greetings.map((g, i) => {
+        const v = convertPrompt(g, convert); note(`開場白 ${i + 1}`, g, v); return v;
+      });
+    }
+    if (Array.isArray(obj.tags)) obj.tags = obj.tags.map(convert);
+  }
+
+  const book = data.character_book;
+  if (book) {
+    // 世界書名稱可以轉換，但 extensions.world 必須跟著一起改 ——
+    // 角色卡靠這個字串綁定世界書，只改一邊就會找不到。
+    if (book.name) {
+      const oldName = book.name;
+      const newName = convert(oldName);
+      if (newName !== oldName) {
+        note('世界書名稱', oldName, newName);
+        book.name = newName;
+        for (const o of [data.extensions, card.extensions]) {
+          if (!o || !('world' in o)) continue;
+          const before = o.world;
+          // 原本就對得上 -> 直接沿用新名稱；原本就不一致 -> 各自轉換，交給驗證去報
+          o.world = (before === oldName) ? newName : convert(before);
+          note('世界書綁定', before, o.world);
+        }
+      }
+    }
+    (book.entries || []).forEach((e, idx) => {
+      const cls = { kind: kindOf(e, idx) };
+
+      // 條目名稱
+      if (cls.kind === 'data') {
+        // 保持／還原為簡體
+        const rev = canon('entryNames', e.comment);
+        if (rev) { note('條目名稱（還原）', e.comment, rev); e.comment = rev; }
+      } else if (e.comment) {
+        const v = convert(e.comment); note('條目名稱', e.comment, v); e.comment = v;
+      }
+
+      // 內容
+      if (e.content) {
+        let v;
+        if (cls.kind === 'data') {
+          v = convertDataContent(e.content, convert);
+          // 鍵名還原
+          v = v.split('\n').map(line => {
+            const m = line.match(RE_KV);
+            if (m) { const c = canon('keys', m[1]); if (c) return c + '=' + m[2]; }
+            const s = line.match(RE_SECTION);
+            if (s) { const c = canon('sections', s[1]); if (c) return '[' + c + ']'; }
+            return line;
+          }).join('\n');
+        } else {
+          v = convertPrompt(e.content, convert);
+        }
+        note(`條目內容「${e.comment}」`, e.content, v);
+        e.content = v;
+      }
+
+      // 觸發關鍵字：要跟 AI 輸出一致 → 轉換
+      for (const kf of ['keys', 'secondary_keys', 'key', 'keysecondary']) {
+        if (Array.isArray(e[kf])) e[kf] = e[kf].map(k => {
+          const v = convert(k); note(`關鍵字`, k, v); return v;
+        });
+      }
+    });
+  }
+
+  // 腳本：程式碼一律不動，只還原按鈕名
+  const th = data.extensions?.tavern_helper;
+  if (th?.scripts) for (const s of th.scripts) {
+    if (s.name) { const v = convert(s.name); note('腳本名稱', s.name, v); s.name = v; }
+    if (s.info) { const v = convertPrompt(s.info, convert); note('腳本說明', s.info, v); s.info = v; }
+    for (const b of s.button?.buttons || []) {
+      const rev = canon('buttons', b.name);
+      if (rev) { note('按鈕名稱（還原）', b.name, rev); b.name = rev; }
+    }
+  }
+
+  // 正則：可選
+  if (opts.doRegex && data.extensions?.regex_scripts) {
+    for (const r of data.extensions.regex_scripts) {
+      if (r.scriptName) { const v = convert(r.scriptName); note('正則名稱', r.scriptName, v); r.scriptName = v; }
+      for (const f of ['findRegex', 'replaceString']) {
+        if (typeof r[f] === 'string' && r[f]) {
+          const v = protectedConvert(r[f], convert, [P_URL, P_HEX, /<script[\s\S]*?<\/script>/gi]);
+          note(`正則 ${f}`, r[f], v); r[f] = v;
+        }
+      }
+    }
+  }
+
+  return { card, changed };
+}
+
+/**
+ * 錯字偵測：在語料中尋找與 word 只差一個漢字、但出現頻率明顯高得多的字串。
+ * 用頻率比而非「有無出現」，因為錯字常常會一起被複製到別的地方。
+ */
+function findLikelyTypo(word, corpus) {
+  const n = word.length;
+  const count = s => { let c = 0, i = 0; while ((i = corpus.indexOf(s, i)) !== -1) { c++; i += s.length; } return c; };
+  const wordCount = count(word);
+  const tally = new Map();
+  for (let i = 0; i + n <= corpus.length; i++) {
+    const cand = corpus.substr(i, n);
+    if (cand === word || tally.has(cand)) continue;
+    let diff = 0, at = -1;
+    for (let j = 0; j < n; j++) if (cand[j] !== word[j]) { diff++; at = j; if (diff > 1) break; }
+    if (diff !== 1) continue;
+    if (!/[\u4e00-\u9fff]/.test(word[at]) || !/[\u4e00-\u9fff]/.test(cand[at])) continue;
+    tally.set(cand, count(cand));
+  }
+  let best = null;
+  for (const [cand, c] of tally) if (!best || c > best.count) best = { cand, count: c };
+  // 正確寫法應該明顯更常見，才判定為錯字
+  if (best && best.count >= 5 && best.count >= Math.max(2, wordCount) * 4) {
+    return { cand: best.cand, candCount: best.count, wordCount };
+  }
+  return null;
+}
+
+/* ---------- 驗證 ---------- */
+function validate(card, kindOf) {
+  kindOf = kindOf || ((e, i) => classifyEntry(e).kind);
+  const issues = [];
+  const add = (level, title, detail, fix) => issues.push({ level, title, detail, fix });
+  const data = card.data || card;
+  const entries = data.character_book?.entries || [];
+  const allText = JSON.stringify(card);
+
+  const dataEntries = [], promptEntries = [];
+  entries.forEach((e, i) => (kindOf(e, i) === 'data' ? dataEntries : promptEntries).push(e));
+
+  /* 1. 資料條目名稱是繁體 */
+  for (const e of dataEntries) {
+    const cn = canon('entryNames', e.comment);
+    if (cn) {
+      add('error', '資料條目名稱是繁體，腳本找不到它',
+        `「${e.comment}」應為「${cn}」。腳本靠條目名稱定位資料，名稱不符會整條跳過，改裡面的內容不會有任何反應。`,
+        'entryName');
+    }
+  }
+
+  /* 2. 設定鍵名是繁體 */
+  for (const e of dataEntries) {
+    const bad = [];
+    for (const line of (e.content || '').split('\n')) {
+      const m = line.match(RE_KV);
+      if (m) { const c = canon('keys', m[1]); if (c) bad.push(`${m[1]} → ${c}`); }
+      const s = line.match(RE_SECTION);
+      if (s) { const c = canon('sections', s[1]); if (c) bad.push(`[${s[1]}] → [${c}]`); }
+    }
+    if (bad.length) {
+      add('error', '設定鍵名是繁體，會被靜默忽略',
+        `條目「${e.comment}」共 ${[...new Set(bad)].length} 個鍵：${[...new Set(bad)].join('、')}。這類失敗不會報錯，只會表現成「設定沒生效」。`,
+        'keys');
+    }
+  }
+
+  /* 3. 斷行的資料列 */
+  for (const e of dataEntries) {
+    const lines = (e.content || '').split('\n');
+    let broken = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].trim().match(RE_STICKER);
+      if (m && !m[2].trim() && /^https?:\/\//.test((lines[i + 1] || '').trim())) broken++;
+    }
+    if (broken) {
+      add('error', '資料列被斷成兩行',
+        `條目「${e.comment}」有 ${broken} 筆是「名稱--」換行後才接網址，解析時會得到空網址，這些項目永遠不會顯示。`,
+        'rejoin');
+    }
+  }
+
+  /* 4. 表情包資料 vs AI 清單 */
+  const stickerEntry = dataEntries.find(e => /表情包/.test(e.comment || ''));
+  const aiListEntry = entries.find(e => /表情包.*列表|列表.*表情包|發給|发给/.test(e.comment || ''));
+  if (stickerEntry && aiListEntry) {
+    const names = new Set();
+    for (const line of stickerEntry.content.split('\n')) {
+      const m = line.trim().match(RE_STICKER);
+      if (m && !/^#/.test(line) && m[2].trim()) names.add(m[1].trim());
+    }
+    const arr = (aiListEntry.content.match(/\[[\s\S]*\]/) || [null])[0];
+    if (arr) {
+      let list = null;
+      try { list = JSON.parse(arr); } catch (_) {}
+      if (Array.isArray(list)) {
+        const miss = list.filter(n => !names.has(n));
+        if (miss.length) {
+          add('warn', 'AI 清單裡有資料庫沒有的表情包',
+            `${miss.length} 筆：${miss.slice(0, 8).join('、')}${miss.length > 8 ? ' …' : ''}。AI 挑到這些會顯示不出來。`, null);
+        }
+        const extra = [...names].filter(n => !list.includes(n));
+        if (extra.length) {
+          add('info', '資料庫有 AI 不知道的表情包',
+            `${extra.length} 筆沒有寫進 AI 清單，AI 永遠不會使用它們。`, null);
+        }
+      }
+    }
+  }
+
+  /* 5. 重複名稱 */
+  if (stickerEntry) {
+    const seen = new Map();
+    for (const line of stickerEntry.content.split('\n')) {
+      const m = line.trim().match(RE_STICKER);
+      if (m && !/^#/.test(line)) seen.set(m[1].trim(), (seen.get(m[1].trim()) || 0) + 1);
+    }
+    const dup = [...seen].filter(([, n]) => n > 1).map(([k]) => k);
+    if (dup.length) add('warn', '表情包名稱重複', `${dup.length} 個：${dup.join('、')}。同名會互相覆蓋。`, null);
+  }
+
+  /* 6. 錯字偵測 —— 語料為全卡正文（不含 keys 宣告本身） */
+  const corpus = entries.map(x => (x.comment || '') + '\n' + (x.content || '')).join('\n')
+    + '\n' + ['description', 'personality', 'scenario', 'first_mes', 'mes_example']
+      .map(k => data[k] || '').join('\n')
+    + '\n' + (data.alternate_greetings || []).join('\n');
+  const reported = new Set();
+  for (const e of promptEntries) {
+    for (const k of [...(e.keys || []), ...(e.key || [])]) {
+      // 只檢查 3 字以上：2 字中文的「只差一字」巧合太多，會產生誤判
+      if (k.length < 3 || /[a-zA-Z0-9]/.test(k) || reported.has(k)) continue;
+      const t = findLikelyTypo(k, corpus);
+      if (t) {
+        reported.add(k);
+        const it = { level: 'warn', title: '疑似錯字，條目不會被觸發',
+          detail: `條目「${e.comment}」的關鍵字是「${k}」（全卡出現 ${t.wordCount} 次），`
+            + `但卡片主要使用的是「${t.cand}」（${t.candCount} 次）。若「${k}」是錯字，這個條目永遠不會觸發。`,
+          fix: 'typo', typo: { from: k, to: t.cand, entry: e.comment } };
+        issues.push(it);
+      }
+    }
+  }
+
+  /* 7. 舊式巨集 */
+  const legacy = [];
+  for (const e of entries) if (/<user>|<char>|<bot>/i.test(e.content || '')) legacy.push(e.comment);
+  for (const k of ['description', 'first_mes', 'personality', 'scenario'])
+    if (/<user>|<char>|<bot>/i.test(data[k] || '')) legacy.push(k);
+  if (legacy.length) {
+    add('warn', '使用了舊式巨集 <user>',
+      `出現在：${[...new Set(legacy)].join('、')}。舊寫法不保證被代換，可能讓 AI 把「<user>」當成人名寫進輸出。建議改用 {{user}}。`,
+      'macro');
+  }
+
+  /* 8. 輸出格式指示放太前面 */
+  for (const e of entries) {
+    if (!/(<msg>|<rednote>|輸出格式|输出格式)/.test(e.content || '')) continue;
+    const pos = (e.extensions && 'position' in e.extensions) ? e.extensions.position : e.position;
+    if (pos !== 4) {
+      add('warn', '輸出格式指示不在 at-depth',
+        `條目「${e.comment}」規定了輸出格式，但位置是 ${pos === 0 ? 'before_char' : 'after_char'}。離對話尾端太遠，長對話時模型容易忘記格式。建議改成 @D 4、role = system。`,
+        'depth');
+    }
+  }
+
+  /* 9. 按鈕名稱是繁體 */
+  for (const s of data.extensions?.tavern_helper?.scripts || []) {
+    for (const b of s.button?.buttons || []) {
+      const cb = canon('buttons', b.name);
+      if (cb) {
+        add('error', '腳本按鈕名稱是繁體，按了不會有反應',
+          `「${b.name}」應為「${cb}」。遠端腳本監聽的是簡體事件名，名稱不符就沒有任何人在聽。`,
+          'button');
+      }
+    }
+  }
+
+  /* 10. 世界書綁定名稱不一致 */
+  const bookName = data.character_book?.name;
+  const worldRef = data.extensions?.world ?? card.extensions?.world;
+  if (bookName && worldRef && bookName !== worldRef) {
+    add('error', '角色卡找不到自己的世界書',
+      `世界書叫「${bookName}」，但角色卡綁定的名稱寫的是「${worldRef}」。`
+      + '兩者必須完全一致，否則匯入後角色卡會指向一個不存在的世界書，'
+      + '所有依賴世界書的功能（手機、狀態列）都會失效。',
+      'worldname');
+  }
+
+  /* 11. http 圖片 */
+  const http = (allText.match(/http:\/\/[^"\\]+/g) || []).length;
+  if (http) {
+    add('info', `有 ${http} 個 http:// 網址`,
+      '如果你的酒館是掛在 https 網域（Zeabur、Vercel 等），瀏覽器會擋掉這些圖片。本機 http 使用則沒問題。', null);
+  }
+
+  return { issues, dataEntries, promptEntries };
+}
+
+/* ---------- 自動修復 ---------- */
+function autofix(cardIn, which, kindOf) {
+  kindOf = kindOf || ((e, i) => classifyEntry(e).kind);
+  const card = JSON.parse(JSON.stringify(cardIn));
+  const data = card.data || card;
+  const entries = data.character_book?.entries || [];
+  const done = [];
+
+  entries.forEach((e, idx) => {
+    const isData = kindOf(e, idx) === 'data';
+
+    if (which.entryName && isData) {
+      const c = canon('entryNames', e.comment);
+      if (c) { done.push(`條目名稱 ${e.comment} → ${c}`); e.comment = c; }
+    }
+
+    if (which.keys && isData && e.content) {
+      let n = 0;
+      e.content = e.content.split('\n').map(line => {
+        const m = line.match(RE_KV);
+        if (m) { const c = canon('keys', m[1]); if (c) { n++; return c + '=' + m[2]; } }
+        const s = line.match(RE_SECTION);
+        if (s) { const c = canon('sections', s[1]); if (c) { n++; return '[' + c + ']'; } }
+        return line;
+      }).join('\n');
+      if (n) done.push(`「${e.comment}」還原 ${n} 個鍵名`);
+    }
+
+    if (which.rejoin && isData && e.content) {
+      const lines = e.content.split('\n');
+      const out = []; let n = 0;
+      for (let i = 0; i < lines.length; i++) {
+        const t = lines[i].trim();
+        const m = t.match(RE_STICKER);
+        if (m && !m[2].trim() && /^https?:\/\//.test((lines[i + 1] || '').trim())) {
+          out.push(m[1].trim() + '--' + lines[i + 1].trim()); i++; n++;
+        } else out.push(lines[i]);
+      }
+      if (n) { e.content = out.join('\n'); done.push(`「${e.comment}」接回 ${n} 筆斷行`); }
+    }
+
+    if (which.macro && e.content && /<user>/i.test(e.content)) {
+      const n = (e.content.match(/<user>/gi) || []).length;
+      e.content = e.content.replace(/<user>/gi, '{{user}}');
+      done.push(`「${e.comment}」<user> → {{user}}（${n} 處）`);
+    }
+
+    if (which.depth && /(<msg>|<rednote>)/.test(e.content || '')) {
+      const t = e.extensions && 'position' in e.extensions ? e.extensions : e;
+      if (t.position !== 4) {
+        t.position = 4; t.depth = 4; t.role = 0;
+        done.push(`「${e.comment}」位置 → @D 4 / system`);
+      }
+    }
+  });
+
+  // 錯字：只改使用者確認過的項目
+  for (const t of which.typoList || []) {
+    let n = 0;
+    const swap = str => { const c = (str.split(t.from).length - 1); n += c; return c ? str.split(t.from).join(t.to) : str; };
+    for (const e of entries) {
+      for (const kf of ['keys', 'secondary_keys', 'key', 'keysecondary'])
+        if (Array.isArray(e[kf])) e[kf] = e[kf].map(swap);
+      if (e.content) e.content = swap(e.content);
+      if (e.comment) e.comment = swap(e.comment);
+    }
+    for (const k of ['description', 'personality', 'scenario', 'first_mes', 'mes_example'])
+      if (typeof data[k] === 'string') data[k] = swap(data[k]);
+    if (Array.isArray(data.alternate_greetings))
+      data.alternate_greetings = data.alternate_greetings.map(swap);
+    if (n) done.push(`錯字 ${t.from} → ${t.to}（${n} 處）`);
+  }
+
+  if (which.worldname) {
+    const bn = data.character_book?.name;
+    if (bn) {
+      for (const o of [data.extensions, card.extensions]) {
+        if (o && 'world' in o && o.world !== bn) {
+          done.push(`世界書綁定 ${o.world} → ${bn}`);
+          o.world = bn;
+        }
+      }
+    }
+  }
+
+  if (which.button) {
+    for (const s of data.extensions?.tavern_helper?.scripts || []) {
+      for (const b of s.button?.buttons || []) {
+        const c = canon('buttons', b.name);
+        if (c) { done.push(`按鈕 ${b.name} → ${c}`); b.name = c; }
+      }
+    }
+  }
+
+  // 頂層鏡像同步
+  if (card.data) for (const k of ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example'])
+    if (k in card && k in card.data) card[k] = card.data[k];
+
+  return { card, done };
+}
+
+
+/* ============================================================
+   預設（Preset）與世界書 JSON
+   ============================================================ */
+
+/** 判斷載入的 JSON 是哪一種檔案。 */
+function detectKind(o) {
+  if (!o || typeof o !== 'object') return 'unknown';
+  if (Array.isArray(o.prompts) || 'prompt_order' in o || 'chat_completion_source' in o) return 'preset';
+  if (o.spec || o.data?.description !== undefined || (o.name !== undefined && o.description !== undefined)) return 'card';
+  if (o.entries && typeof o.entries === 'object') return 'worldbook';
+  return 'unknown';
+}
+
+/* ---------- 世界書 JSON ---------- */
+function wrapWorldbook(wb) {
+  const uids = Object.keys(wb.entries);
+  const entries = uids.map(u => wb.entries[u]);
+  return { pseudo: { data: { name: wb.name || '', character_book: { entries } } }, uids };
+}
+function unwrapWorldbook(orig, pseudo, uids) {
+  const out = JSON.parse(JSON.stringify(orig));
+  const arr = pseudo.data.character_book.entries;
+  uids.forEach((u, i) => { out.entries[u] = arr[i]; });
+  return out;
+}
+
+/* ---------- 預設 ---------- */
+const PRESET_TEXT_FIELDS = [
+  'impersonation_prompt', 'new_chat_prompt', 'new_group_chat_prompt', 'new_example_chat_prompt',
+  'continue_nudge_prompt', 'group_nudge_prompt', 'send_if_empty', 'assistant_prefill',
+  'assistant_impersonation', 'human_sysprompt_message', 'wi_format', 'scenario_format',
+  'personality_format',
+];
+
+const presetPrompts = p => Array.isArray(p.prompts) ? p.prompts : [];
+
+/**
+ * 轉換預設。identifier 與 prompt_order 完全不動 —— 它們是程式配對用的鍵，
+ * 一旦被繁化，提示詞就會從順序清單裡消失。
+ */
+function convertPreset(presetIn, opts) {
+  const p = JSON.parse(JSON.stringify(presetIn));
+  const convert = opts.convert;
+  const changed = [];
+  const note = (w, a, b) => { if (a !== b) changed.push({ where: w, before: a, after: b }); };
+
+  for (const f of PRESET_TEXT_FIELDS) {
+    if (typeof p[f] === 'string' && p[f]) {
+      const v = convertPrompt(p[f], convert); note(f, p[f], v); p[f] = v;
+    }
+  }
+  for (const pr of presetPrompts(p)) {
+    if (typeof pr.name === 'string' && pr.name) {
+      const v = convert(pr.name); note('提示詞名稱', pr.name, v); pr.name = v;
+    }
+    if (typeof pr.content === 'string' && pr.content) {
+      const v = convertPrompt(pr.content, convert); note(`「${pr.name}」內容`, pr.content, v); pr.content = v;
+    }
+  }
+  if (opts.doRegex && Array.isArray(p.extensions?.regex)) {
+    for (const r of p.extensions.regex) {
+      if (r.scriptName) { const v = convert(r.scriptName); note('正則名稱', r.scriptName, v); r.scriptName = v; }
+      for (const f of ['findRegex', 'replaceString']) {
+        if (typeof r[f] === 'string' && r[f]) {
+          const v = protectedConvert(r[f], convert, [P_URL, P_HEX]); note(`正則 ${f}`, r[f], v); r[f] = v;
+        }
+      }
+    }
+  }
+  return { preset: p, changed };
+}
+
+function validatePreset(p) {
+  const issues = [];
+  const add = (level, title, detail, fix, extra) =>
+    issues.push(Object.assign({ level, title, detail, fix }, extra || {}));
+  const prompts = presetPrompts(p);
+  const ids = new Set(prompts.map(x => x.identifier));
+
+  const broken = [];
+  for (const blk of p.prompt_order || []) {
+    for (const it of blk.order || []) {
+      if (ids.has(it.identifier)) continue;
+      const near = prompts.find(x => sameWord(x.identifier, it.identifier));
+      broken.push({ id: it.identifier, match: near ? near.identifier : null });
+    }
+  }
+  const fixable = broken.filter(b => b.match);
+  if (fixable.length) {
+    add('error', '提示詞識別碼繁簡不一致，提示詞不會生效',
+      `順序清單裡有 ${fixable.length} 個識別碼與提示詞本體對不上（例如「${fixable[0].id}」對應「${fixable[0].match}」）。`
+      + '識別碼是程式配對用的鍵，被繁化後這些提示詞就從順序清單消失，等於整段沒送進去。',
+      'identifier');
+  }
+  const orphan = broken.filter(b => !b.match);
+  if (orphan.length) {
+    add('warn', '順序清單有找不到的提示詞',
+      `${orphan.length} 個識別碼在提示詞裡不存在：${orphan.slice(0, 5).map(o => o.id).join('、')}${orphan.length > 5 ? ' …' : ''}。`
+      + '可能是預設本身沒清乾淨，通常無害，但那幾段不會出現。', null);
+  }
+
+  const cjk = prompts.filter(x => /[\u4e00-\u9fff]/.test(x.identifier || ''));
+  if (cjk.length) {
+    add('warn', `有 ${cjk.length} 個提示詞使用中文識別碼`,
+      '中文識別碼只要被任何繁簡工具處理過就可能對不上順序清單。校對台不會動它們，但若你之後用別的工具轉換，這裡就是風險點。', null);
+  }
+
+  const enabledIds = new Set();
+  for (const blk of p.prompt_order || []) for (const it of blk.order || []) if (it.enabled) enabledIds.add(it.identifier);
+  const empty = prompts.filter(x => enabledIds.has(x.identifier) && !x.marker && !(x.content || '').trim());
+  if (empty.length) {
+    add('info', `${empty.length} 個已啟用的提示詞內容是空的`,
+      empty.slice(0, 6).map(x => x.name || x.identifier).join('、') + (empty.length > 6 ? ' …' : '')
+      + '。空提示詞不影響運作，只是沒有效果。', null);
+  }
+
+  const legacy = prompts.filter(x => /<user>|<char>|<bot>/i.test(x.content || '')).map(x => x.name || x.identifier);
+  for (const f of PRESET_TEXT_FIELDS) if (/<user>|<char>|<bot>/i.test(p[f] || '')) legacy.push(f);
+  if (legacy.length) {
+    add('warn', '使用了舊式巨集 <user>',
+      `出現在：${[...new Set(legacy)].slice(0, 6).join('、')}。舊寫法不保證被代換，建議改用 {{user}}。`, 'macro');
+  }
+
+  const seen = new Map();
+  for (const x of prompts) seen.set(x.identifier, (seen.get(x.identifier) || 0) + 1);
+  const dup = [...seen].filter(([, n]) => n > 1).map(([k]) => k);
+  if (dup.length) add('warn', '識別碼重複', `${dup.length} 個：${dup.join('、')}。重複的會互相覆蓋。`, null);
+
+  return { issues };
+}
+
+function autofixPreset(presetIn, which) {
+  const p = JSON.parse(JSON.stringify(presetIn));
+  const done = [];
+  const prompts = presetPrompts(p);
+
+  if (which.identifier) {
+    const ids = new Set(prompts.map(x => x.identifier));
+    let n = 0;
+    for (const blk of p.prompt_order || []) {
+      for (const it of blk.order || []) {
+        if (ids.has(it.identifier)) continue;
+        const near = prompts.find(x => sameWord(x.identifier, it.identifier));
+        if (near) { it.identifier = near.identifier; n++; }
+      }
+    }
+    if (n) done.push(`修正 ${n} 個對不上的提示詞識別碼`);
+  }
+
+  if (which.macro) {
+    let n = 0;
+    const swap = s => { const c = (s.match(/<user>/gi) || []).length; n += c; return c ? s.replace(/<user>/gi, '{{user}}') : s; };
+    for (const pr of prompts) if (pr.content) pr.content = swap(pr.content);
+    for (const f of PRESET_TEXT_FIELDS) if (typeof p[f] === 'string') p[f] = swap(p[f]);
+    if (n) done.push(`<user> → {{user}}（${n} 處）`);
+  }
+
+  return { preset: p, done };
+}
+
+if (false) module.exports = {
+  detectKind, wrapWorldbook, unwrapWorldbook, convertPreset, validatePreset, autofixPreset,
+  buildReverseIndex, canon, sameWord, findLikelyTypo, extractCard, buildPng, convertCard, validate, autofix, classifyEntry, LEXICON, crc32,
+};
+
+/* ============================================================
+   風險稽核：找出可能竊取憑證、外傳資料或注入程式碼的內容
+   ============================================================ */
+
+const SINKS = [
+  [/\bfetch\s*\(/g,                     '對外送出請求（fetch）'],
+  [/XMLHttpRequest|\.open\s*\(\s*['"](?:POST|GET)/g, '對外送出請求（XHR）'],
+  [/navigator\s*\.\s*sendBeacon/g,      '背景外傳資料（sendBeacon）'],
+  [/new\s+WebSocket|io\s*\(\s*['"]wss?:/g, '建立長連線（WebSocket）'],
+  [/\$\.(?:ajax|post|get)\s*\(/g,       '對外送出請求（jQuery）'],
+  [/\baxios\s*\.\s*\w+\s*\(/g,          '對外送出請求（axios）'],
+  [/new\s+Image\s*\(\s*\)\s*\.\s*src\s*=/g, '用圖片請求外傳資料'],
+];
+
+const SECRETS = [
+  [/\/api\/secrets|secret_state|readSecretState|findSecret|writeSecret/gi, '存取酒館的金鑰儲存區'],
+  [/\b(?:api[_-]?key|apikey|authorization|bearer)\b/gi, '出現 API 金鑰相關字樣'],
+  [/reverse_proxy|proxy_password/gi,    '存取反向代理設定與密碼'],
+  [/oai_settings|power_user|\bsettings\.json\b/g, '讀取酒館設定物件'],
+  [/localStorage\s*\.\s*(?:getItem|key)\s*\(|Object\.keys\s*\(\s*localStorage/g, '讀取瀏覽器本機儲存'],
+  [/document\s*\.\s*cookie/g,           '讀取 Cookie'],
+];
+
+const OBFUS = [
+  [/\beval\s*\(/g,                      'eval 動態執行程式碼'],
+  [/new\s+Function\s*\(/g,              'Function 建構式動態執行'],
+  [/\batob\s*\(/g,                      'Base64 解碼（常用於藏字串）'],
+  [/String\.fromCharCode\s*\([^)]{40,}/g, '字元碼拼接字串（混淆）'],
+  [/(?:\\x[0-9a-fA-F]{2}){8,}/g,        '十六進位跳脫字串（混淆）'],
+  [/[A-Za-z0-9+/]{200,}={0,2}/g,        '超長 Base64 區塊'],
+];
+
+const INJECT = [
+  [/<script[\s>]/gi,                    '嵌入 <script> 標籤'],
+  [/\bon(?:error|load|click|mouseover)\s*=/gi, 'HTML 事件處理屬性'],
+  [/javascript\s*:/gi,                  'javascript: 協定'],
+  [/<iframe[\s>]/gi,                    '嵌入 iframe'],
+  [/srcdoc\s*=/gi,                      'iframe srcdoc'],
+  [/document\s*\.\s*write|innerHTML\s*=/g, '直接寫入 DOM'],
+];
+
+const PROMPT_ATTACK = [
+  [/(?:ignore|disregard|forget)\s+(?:all\s+)?(?:previous|above|prior)\s+(?:instructions|prompts)/gi, '嘗試覆寫先前指令'],
+  [/(?:输出|輸出|показ|reveal|print|repeat)\s*(?:你的|your)?\s*(?:system\s*prompt|系统提示|系統提示|預設|预设)/gi, '嘗試套取系統提示詞'],
+  [/忽略(?:上面|之前|先前|以上)(?:所有)?(?:的)?(?:指令|規則|规则|提示)/g, '嘗試覆寫先前指令'],
+];
+
+const KNOWN_HOSTS = new Set([
+  'cdn.jsdelivr.net', 'fastly.jsdelivr.net', 'unpkg.com', 'cdnjs.cloudflare.com',
+  'raw.githubusercontent.com', 'raw.githack.com', 'github.com', 'files.catbox.moe',
+  'i.imgur.com', 'imgur.com', 'i.postimg.cc', 'postimg.cc', 'sm.ms', 's2.loli.net',
+  'z4a.net', 'img.erpweb.eu.org', 'pixiv.net', 'i.pximg.net',
+]);
+
+function scanText(text, rules, where, out, level, kind) {
+  if (!text) return;
+  for (const [re, label] of rules) {
+    re.lastIndex = 0;
+    const m = re.exec(text);
+    if (!m) continue;
+    re.lastIndex = 0;
+    const n = (text.match(re) || []).length;
+    const idx = m.index;
+    const line = text.slice(0, idx).split('\n').length;
+    const snip = text.slice(Math.max(0, idx - 40), idx + 80).replace(/\s+/g, ' ').trim();
+    out.push({ level, kind, label, where, count: n, line, snippet: snip });
+  }
+}
+
+function collectHosts(text, map, where) {
+  if (!text) return;
+  const re = /https?:\/\/([^\s"'`<>)\\]+)/g;
+  let m;
+  while ((m = re.exec(text))) {
+    let host = m[1].split('/')[0].toLowerCase();
+    if (!host) continue;
+    if (!map.has(host)) map.set(host, { count: 0, where: new Set() });
+    const e = map.get(host);
+    e.count++; e.where.add(where);
+  }
+}
+
+/**
+ * 稽核角色卡 / 世界書 / 預設。
+ * 回傳 { findings, hosts, remoteCode, stats }
+ */
+function auditDoc(doc, kind) {
+  const findings = [];
+  const hosts = new Map();
+  const remoteCode = [];
+  const data = doc?.data || doc || {};
+
+  const addScan = (text, where, opts) => {
+    scanText(text, SINKS,   where, findings, 'danger',  'network');
+    scanText(text, SECRETS, where, findings, 'danger',  'secret');
+    scanText(text, OBFUS,   where, findings, 'warn',    'obfus');
+    if (opts?.html !== false) scanText(text, INJECT, where, findings, 'warn', 'inject');
+    collectHosts(text, hosts, where);
+  };
+
+  /* --- 腳本：風險最高 --- */
+  for (const s of data.extensions?.tavern_helper?.scripts || []) {
+    const w = `腳本「${s.name}」`;
+    addScan(s.content || '', w);
+    // 遠端載入的程式碼無法被靜態檢查
+    const re = /(?:loadScript|import)\s*\(\s*\[?\s*[`'"]([^`'"]+)[`'"]/g;
+    let m;
+    while ((m = re.exec(s.content || ''))) remoteCode.push({ where: w, url: m[1] });
+    const re2 = /https?:\/\/[^\s`'"]+\.(?:js|mjs)(?:\?[^\s`'"]*)?/g;
+    while ((m = re2.exec(s.content || ''))) {
+      if (!remoteCode.some(r => r.url === m[0])) remoteCode.push({ where: w, url: m[0] });
+    }
+  }
+
+  /* --- 正則：replaceString 可以塞 HTML/JS --- */
+  const regexList = data.extensions?.regex_scripts || doc?.extensions?.regex || [];
+  for (const r of regexList) {
+    addScan(r.replaceString || '', `正則「${r.scriptName || '未命名'}」的取代內容`);
+    addScan(r.findRegex || '', `正則「${r.scriptName || '未命名'}」的比對式`, { html: false });
+  }
+
+  /* --- 世界書條目 --- */
+  const entries = data.character_book?.entries
+    || (doc?.entries ? Object.values(doc.entries) : []);
+  for (const e of entries) {
+    const w = `條目「${e.comment || '未命名'}」`;
+    addScan(e.content || '', w);
+    scanText(e.content || '', PROMPT_ATTACK, w, findings, 'warn', 'prompt');
+  }
+
+  /* --- 卡片正文與開場白 --- */
+  for (const k of ['description', 'personality', 'scenario', 'first_mes', 'mes_example', 'system_prompt']) {
+    addScan(data[k] || '', `角色卡 ${k}`);
+    scanText(data[k] || '', PROMPT_ATTACK, `角色卡 ${k}`, findings, 'warn', 'prompt');
+  }
+  (data.alternate_greetings || []).forEach((g, i) => addScan(g, `開場白 ${i + 1}`));
+
+  /* --- 預設 --- */
+  for (const p of doc?.prompts || []) {
+    const w = `提示詞「${p.name || p.identifier}」`;
+    addScan(p.content || '', w);
+    scanText(p.content || '', PROMPT_ATTACK, w, findings, 'warn', 'prompt');
+  }
+  if (doc?.custom_url) {
+    findings.push({ level: 'warn', kind: 'net', label: '預設指定了自訂 API 位址',
+      where: 'custom_url', count: 1, snippet: doc.custom_url });
+    collectHosts(doc.custom_url, hosts, 'custom_url');
+  }
+  if (doc?.reverse_proxy) {
+    findings.push({ level: 'danger', kind: 'net', label: '預設內含反向代理位址（你的請求會經過第三方）',
+      where: 'reverse_proxy', count: 1, snippet: doc.reverse_proxy });
+    collectHosts(doc.reverse_proxy, hosts, 'reverse_proxy');
+  }
+  if (doc?.proxy_password) {
+    findings.push({ level: 'danger', kind: 'secret', label: '預設內含代理密碼',
+      where: 'proxy_password', count: 1, snippet: '（已隱藏）' });
+  }
+
+  const hostList = [...hosts.entries()].map(([h, v]) => ({
+    host: h, count: v.count, where: [...v.where].slice(0, 3), known: KNOWN_HOSTS.has(h),
+  })).sort((a, b) => (a.known === b.known ? b.count - a.count : a.known ? 1 : -1));
+
+  return {
+    findings, hosts: hostList, remoteCode,
+    stats: {
+      danger: findings.filter(f => f.level === 'danger').length,
+      warn: findings.filter(f => f.level === 'warn').length,
+      unknownHosts: hostList.filter(h => !h.known).length,
+    },
+  };
+}
+
+
+</script>
+<script>/* ============================================================
+   介面連接
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const DIRS = [
+  { id: 'cn2tw',  label: '簡 → 繁（台灣字形）　建議', from: 'cn', to: 'tw',
+    note: '只做字形轉換，不替換詞彙 —— 不會出現「型別」「指令碼」這類替換。<b>但注意：光是字形轉換就足以破壞設定鍵名</b>（<span class="mono">类型→類型、头像→頭像</span>，程式一樣對不上），所以保護機制在<b>任何</b>模式下都會啟用。' },
+  { id: 'cn2twp', label: '簡 → 繁（台灣用語）　不建議', from: 'cn', to: 'twp',
+    note: '<b>會替換詞彙</b>：<span class="mono">类型→型別、发送→傳送、字体颜色→字型顏色、基本设置→基本設定、脚本→指令碼</span>。閱讀最自然，破壞性也最大。部分轉換工具還會外加自己的詞庫（例如 <span class="mono">头像→頭貼</span>），破壞範圍比 OpenCC 本身更廣。' },
+  { id: 'cn2t',   label: '簡 → 繁（OpenCC 標準）', from: 'cn', to: 't',
+    note: '不套用台灣字形偏好（例如「裏」不會變「裡」）。' },
+  { id: 'tw2cn',  label: '繁 → 簡', from: 'tw', to: 'cn',
+    note: '整張卡轉回簡體。若原本就是繁化過的卡，通常不需要這個 —— 用下面的「只修正不轉換」即可。' },
+  { id: 'none',   label: '不轉換，只套用修正', from: null, to: null,
+    note: '不動任何文字，只執行你在上面勾選的修正。<b>如果你的卡已經是繁體、只是功能壞掉，選這個。</b>' },
+];
+
+const FIXES = [
+  { k: 'entryName', t: '還原資料條目名稱為簡體', d: '腳本靠條目名稱定位資料。名稱是繁體就整條找不到，改內容也不會有反應。' },
+  { k: 'keys',      t: '還原設定鍵名為簡體',     d: '頭貼=、型別= 這類鍵是程式做字串比對的。值（人名、網址、色碼）維持原樣不動。' },
+  { k: 'rejoin',    t: '接回被斷成兩行的資料列', d: '「名稱--」換行後才接網址，解析會得到空網址，那些項目永遠不顯示。' },
+  { k: 'button',    t: '還原腳本按鈕名稱為簡體', d: '遠端腳本監聽簡體事件名。名稱不符，按鈕按了不會有任何反應。' },
+  { k: 'macro',     t: '<user> 改為 {{user}}',   d: '舊寫法不保證被代換，可能讓 AI 把「<user>」當人名寫進輸出。' },
+  { k: 'depth',     t: '輸出格式指示改為 @D 4 / system', d: '格式規則離對話尾端太遠，長對話時模型會忘記。移到 at-depth 比較穩。' },
+  { k: 'worldname', t: '修正世界書綁定名稱',     d: '角色卡靠名稱字串綁定世界書。名稱被繁化就會指向不存在的世界書，手機、狀態列等功能全部失效。' },
+  { k: 'typo',      t: '修正疑似錯字',           d: '把打錯的字統一改成卡片主要使用的寫法。會列出每一項讓你確認 —— 若判斷錯誤請取消勾選。' },
+];
+
+const FIXES_PRESET = [
+  { k: 'identifier', t: '修正對不上的提示詞識別碼', d: '順序清單的識別碼被繁化後會對不上提示詞本體，那幾段等於沒送進去。這裡把它們接回原本的識別碼。' },
+  { k: 'macro',      t: '<user> 改為 {{user}}',    d: '舊寫法不保證被代換，可能讓模型把「<user>」當成字面文字。' },
+];
+
+let S = {
+  srcName: '', srcBuf: null, chunks: null, hadCcv3: false, isPng: false,
+  card: null, out: null, report: '', kinds: [],
+};
+
+/* ---------- OpenCC ---------- */
+let openccReady = null;
+function loadOpenCC() {
+  if (openccReady) return openccReady;
+  const urls = [
+    'https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.js',
+    'https://unpkg.com/opencc-js@1.0.5/dist/umd/full.js',
+  ];
+  openccReady = new Promise((res, rej) => {
+    let i = 0;
+    const next = () => {
+      if (i >= urls.length) return rej(new Error('無法載入 OpenCC 詞庫'));
+      const s = document.createElement('script');
+      s.src = urls[i++];
+      s.onload = () => (window.OpenCC ? res(window.OpenCC) : next());
+      s.onerror = next;
+      document.head.appendChild(s);
+    };
+    next();
+  });
+  return openccReady;
+}
+
+/* ---------- 讀檔 ---------- */
+function bindDrop() {
+  const d = $('#drop'), f = $('#file');
+  d.addEventListener('click', () => f.click());
+  d.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); f.click(); } });
+  f.addEventListener('change', () => f.files[0] && load(f.files[0]));
+  ['dragenter', 'dragover'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.classList.remove('over'); }));
+  d.addEventListener('drop', e => { const fl = e.dataTransfer.files[0]; if (fl) load(fl); });
+}
+
+async function load(file) {
+  try {
+    S.srcName = file.name.replace(/\.(png|json)$/i, '');
+    const buf = await file.arrayBuffer();
+    S.wb = null; S.uids = null; S.preset = null;
+    if (/\.png$/i.test(file.name)) {
+      const r = extractCard(buf);
+      S.card = r.card; S.chunks = r.chunks; S.hadCcv3 = r.hadCcv3; S.isPng = true;
+      S.kind = 'card';
+    } else {
+      const obj = JSON.parse(new TextDecoder().decode(buf));
+      S.isPng = false; S.chunks = null;
+      S.kind = detectKind(obj);
+      if (S.kind === 'preset') { S.preset = obj; S.card = null; }
+      else if (S.kind === 'worldbook') {
+        S.wb = obj;
+        const w = wrapWorldbook(obj);
+        S.card = w.pseudo; S.uids = w.uids;
+      } else if (S.kind === 'card') { S.card = obj; }
+      else throw new Error('無法辨識這個 JSON。支援角色卡、世界書、預設三種。');
+    }
+    S.out = null;
+    $('#app').classList.remove('hidden');
+    // 反查表讓「基本設置 / 基本設定」這類中間態都能被還原
+    loadOpenCC().then(OC => { buildReverseIndex(OC); renderReport(); renderFixes(); renderDirs(); })
+                .catch(() => {});
+    $('#outsec').classList.add('hidden');
+    $('#log').classList.add('hidden');
+    if (S.kind === 'preset') { renderMetaPreset(); renderReport(); renderFixes(); renderDirs(); }
+    else { initKinds(); renderMeta(); renderEntries(); renderReport(); renderFixes(); renderDirs(); }
+    renderAudit();
+    $('#entsec').classList.toggle('hidden', S.kind === 'preset');
+    $('#kindtag').textContent = { card: '角色卡', worldbook: '世界書', preset: '預設' }[S.kind] || '';
+    $('#app').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    alert('讀取失敗：' + e.message);
+  }
+}
+
+const viewCard = () => S.out || S.card;
+const entriesOf = () => (viewCard()?.data || viewCard() || {}).character_book?.entries || [];
+function initKinds() { S.kinds = entriesOf().map(e => classifyEntry(e).kind); }
+const kindOf = (e, i) => S.kinds[i] || 'prompt';
+
+/* ---------- 概要 ---------- */
+function renderMeta() {
+  const d = viewCard().data || viewCard();
+  const es = entriesOf();
+  const nData = S.kinds.filter(k => k === 'data').length;
+  if (S.kind === 'worldbook') {
+    const on = es.filter(e => !e.disable && e.enabled !== false).length;
+    $('#meta').innerHTML = [
+      ['世界書名稱', (S.wb?.name || S.srcName || '（未命名）'), 'sm'],
+      ['條目', es.length, ''], ['啟用中', on, ''],
+      ['資料條目', nData, ''],
+      ['常駐', es.filter(e => e.constant).length, ''],
+    ].map(([t, v, c]) => `<div><dt>${t}</dt><dd class="${c}">${esc(v)}</dd></div>`).join('');
+    return;
+  }
+  const cells = [
+    ['角色名稱', (d.name || '（未命名）').trim(), 'sm'],
+    ['格式', (S.card.spec || 'v1/v2') + (S.card.spec_version ? ' ' + S.card.spec_version : ''), 'sm'],
+    ['世界書條目', es.length, ''],
+    ['資料條目', nData, ''],
+    ['開場白', (d.alternate_greetings || []).length, ''],
+    ['正則', (d.extensions?.regex_scripts || []).length, ''],
+  ];
+  $('#meta').innerHTML = cells.map(([t, v, c]) =>
+    `<div><dt>${t}</dt><dd class="${c}">${esc(v)}</dd></div>`).join('');
+}
+
+function renderMetaPreset() {
+  const p = S.out || S.preset;
+  const ps = p.prompts || [];
+  const enabled = new Set();
+  for (const b of p.prompt_order || []) for (const o of b.order || []) if (o.enabled) enabled.add(o.identifier);
+  const cells = [
+    ['預設來源', p.chat_completion_source || '（未指定）', 'sm'],
+    ['模型', p.claude_model || p.openai_model || p.google_model || p.custom_model || '—', 'sm'],
+    ['提示詞', ps.length, ''],
+    ['已啟用', ps.filter(x => enabled.has(x.identifier)).length, ''],
+    ['中文識別碼', ps.filter(x => /[\u4e00-\u9fff]/.test(x.identifier || '')).length, ''],
+  ];
+  $('#meta').innerHTML = cells.map(([t, v, c]) =>
+    `<div><dt>${t}</dt><dd class="${c}">${esc(v)}</dd></div>`).join('');
+}
+
+/* ---------- 條目分類 ---------- */
+function renderEntries() {
+  const es = entriesOf();
+  if (!es.length) { $('#entries').innerHTML = '<div class="ent"><span class="nm">這個檔案沒有世界書條目。</span></div>'; return; }
+  $('#entries').innerHTML = es.map((e, i) => {
+    const why = classifyEntry(e).reason;
+    return `<div class="ent">
+      <span class="nm">${esc(e.comment || '（無名稱）')}</span>
+      <span class="why">${esc(why)}</span>
+      <span class="seg" role="group">
+        <button data-i="${i}" data-k="data"   aria-pressed="${S.kinds[i] === 'data'}">資料</button>
+        <button data-i="${i}" data-k="prompt" aria-pressed="${S.kinds[i] !== 'data'}">提示詞</button>
+      </span></div>`;
+  }).join('');
+  $('#entries').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    S.kinds[+b.dataset.i] = b.dataset.k;
+    renderEntries(); renderReport(); renderMeta(); renderFixes();
+  }));
+}
+
+/* ---------- 校對報告 ---------- */
+function diffPairs(detail) {
+  const out = [];
+  const res = [
+    /「([^「」]+)」\s*應為\s*「([^「」]+)」/g,
+    /([^\s「」，、]+)\s*(?:→|->)\s*([^\s「」，、。]+)/g,
+  ];
+  for (const re of res) {
+    let m;
+    while ((m = re.exec(detail)) && out.length < 12) out.push([m[1], m[2]]);
+    if (out.length) break;
+  }
+  return out;
+}
+
+function renderReport() {
+  const { issues } = S.kind === 'preset'
+    ? validatePreset(S.out || S.preset)
+    : validate(S.out || S.card, kindOf);
+  S.issues = issues;
+  const nE = issues.filter(i => i.level === 'error').length;
+  const nW = issues.filter(i => i.level === 'warn').length;
+  $('#reportsub').innerHTML = issues.length
+    ? `找到 <b>${nE}</b> 個會讓功能失效的問題、<b>${nW}</b> 個建議處理項。`
+    : '沒有發現已知的問題。';
+
+  if (!issues.length) {
+    $('#report').innerHTML = '<div class="clean"><b>校對通過。</b>沒有偵測到條目名稱、鍵名、斷行或按鈕名稱的問題。</div>';
+    return;
+  }
+  const order = { error: 0, warn: 1, info: 2 };
+  const label = { error: '功能失效', warn: '建議處理', info: '參考' };
+  const sorted = [...issues].sort((a, b) => order[a.level] - order[b.level]);
+  $('#report').innerHTML = '<ol class="errata">' + sorted.map(i => {
+    const pairs = diffPairs(i.detail);
+    return `<li class="${i.level}">
+      <div class="tt">${esc(i.title)}<span class="tag">${label[i.level]}</span></div>
+      <div class="dd">${esc(i.detail)}</div>
+      ${pairs.length ? `<div class="diff">${pairs.map(([a, b]) =>
+        `<span class="pair"><span class="from">${esc(a)}</span><span class="arw">改為</span><span class="to">${esc(b)}</span></span>`
+      ).join('')}</div>` : ''}
+    </li>`;
+  }).join('') + '</ol>';
+}
+
+
+/* ---------- 風險稽核 ---------- */
+function renderAudit() {
+  const doc = S.kind === 'preset' ? (S.out || S.preset)
+            : S.kind === 'worldbook' ? (S.wb ? (S.out ? unwrapWorldbook(S.wb, S.out, S.uids) : S.wb) : null)
+            : (S.out || S.card);
+  if (!doc) return;
+  const r = auditDoc(doc, S.kind);
+  S.audit = r;
+
+  const { danger, warn, unknownHosts } = r.stats;
+  $('#auditsub').innerHTML = danger
+    ? `發現 <b>${danger}</b> 個高風險跡象，請逐項確認後再匯入。`
+    : (warn || unknownHosts)
+      ? `沒有高風險跡象。有 <b>${warn}</b> 個需要留意的項目、<b>${unknownHosts}</b> 個未知外連網域。`
+      : '沒有偵測到可疑內容。';
+
+  let h = '';
+
+  // 遠端程式碼：靜態掃描到不了的地方，單獨講清楚
+  if (r.remoteCode.length) {
+    h += `<div class="remote"><div class="tt">這張卡會從網路載入程式碼</div>
+      <div class="dd">下列網址的內容<b>不在卡片裡</b>，掃描檢查不到，而且作者隨時可以更改。
+      使用這張卡等於持續信任這些來源。</div>
+      <ul class="urls">${r.remoteCode.map(x =>
+        `<li><span class="mono">${esc(x.url)}</span><em>${esc(x.where)}</em></li>`).join('')}</ul></div>`;
+  }
+
+  if (r.findings.length) {
+    const order = { danger: 0, warn: 1 };
+    const lbl = { danger: '高風險', warn: '留意' };
+    const sorted = [...r.findings].sort((a, b) => order[a.level] - order[b.level]);
+    h += '<ol class="errata">' + sorted.map(f => `<li class="${f.level === 'danger' ? 'error' : 'warn'}">
+      <div class="tt">${esc(f.label)}<span class="tag">${lbl[f.level]}</span></div>
+      <div class="dd">出現在 ${esc(f.where)}${f.count > 1 ? `，共 ${f.count} 處` : ''}${f.line ? `（第 ${f.line} 行附近）` : ''}</div>
+      <div class="snip mono">${esc(f.snippet.slice(0, 160))}</div></li>`).join('') + '</ol>';
+  } else {
+    h += '<div class="clean"><b>沒有偵測到可疑程式碼。</b>沒有找到外傳資料、存取金鑰或混淆的跡象。</div>';
+  }
+
+  if (r.hosts.length) {
+    h += `<div class="hosts"><div class="tt">外連網域（${r.hosts.length}）</div>`
+      + r.hosts.map(x => `<div class="host ${x.known ? '' : 'unk'}">
+          <span class="mono">${esc(x.host)}</span>
+          <span>${x.known ? '常見圖床／CDN' : '未知來源'} · ${x.count} 處</span></div>`).join('')
+      + '<div class="dd" style="margin-top:8px">未知來源不代表有問題，但圖片請求會把你的 IP 送給對方。'
+      + '若不信任，可把圖片換到自己的圖床。</div></div>';
+  }
+
+  $('#audit').innerHTML = h;
+}
+
+/* ---------- 修正選項 ---------- */
+function renderFixes() {
+  const codes = new Set((S.issues || []).map(i => i.fix).filter(Boolean));
+  const typos = (S.issues || []).filter(i => i.fix === 'typo');
+  const list = S.kind === 'preset' ? FIXES_PRESET : FIXES;
+  $('#fixes').innerHTML = list.map(f => {
+    const rel = codes.has(f.k);
+    let extra = '';
+    if (f.k === 'typo' && typos.length) {
+      extra = '<div class="typos">' + typos.map((t, i) => `
+        <label class="tp"><input type="checkbox" data-typo="${i}" checked>
+          <span class="pair"><span class="from">${esc(t.typo.from)}</span><span class="arw">改為</span><span class="to">${esc(t.typo.to)}</span></span>
+          <em>${esc(t.typo.entry)}</em></label>`).join('') + '</div>';
+    }
+    return `<label class="ck">
+      <input type="checkbox" data-k="${f.k}" ${rel ? 'checked' : ''}>
+      <span>${esc(f.t)}${rel ? '' : '　<small style="display:inline;color:var(--soft)">（這張卡沒偵測到）</small>'}
+        <small>${f.d.replace(/</g, '&lt;')}</small></span>
+    </label>${extra}`;
+  }).join('');
+}
+
+function renderDirs() {
+  const sel = $('#dir');
+  sel.innerHTML = DIRS.map(d => `<option value="${d.id}">${esc(d.label)}</option>`).join('');
+  const already = (S.issues || []).some(i => i.fix === 'entryName' || i.fix === 'keys');
+  sel.value = already ? 'none' : 'cn2tw';
+  const upd = () => {
+    const d = DIRS.find(x => x.id === sel.value);
+    $('#dirnote').innerHTML = d.note;
+  };
+  sel.onchange = upd; upd();
+}
+
+/* ---------- 執行 ---------- */
+async function run() {
+  const btn = $('#run');
+  btn.disabled = true; btn.textContent = '處理中';
+  const log = $('#log'); log.innerHTML = ''; log.classList.remove('hidden');
+  const say = (t, sub) => {
+    log.insertAdjacentHTML('beforeend', `<div>${esc(t)}${sub ? `<br><span class="mono">${esc(sub)}</span>` : ''}</div>`);
+  };
+
+  try {
+    const which = {};
+    $('#fixes').querySelectorAll('input[data-k]').forEach(i => which[i.dataset.k] = i.checked);
+    if (which.typo) {
+      const all = (S.issues || []).filter(i => i.fix === 'typo');
+      which.typoList = [...$('#fixes').querySelectorAll('input[data-typo]')]
+        .filter(i => i.checked).map(i => all[+i.dataset.typo].typo);
+    }
+    const dir = DIRS.find(d => d.id === $('#dir').value);
+    const isPreset = S.kind === 'preset';
+    let doc = isPreset ? S.preset : S.card;
+
+    const r1 = isPreset ? autofixPreset(doc, which) : autofix(doc, which, kindOf);
+    doc = isPreset ? r1.preset : r1.card;
+    if (r1.done.length) { say(`已套用 ${r1.done.length} 項修正：`); r1.done.forEach(d => say('　' + d)); }
+    else say('沒有套用任何修正（未勾選，或這個檔案沒有這些問題）。');
+
+    if (dir.from) {
+      say('載入 OpenCC 詞庫…');
+      const OC = await loadOpenCC();
+      buildReverseIndex(OC);
+      const convert = OC.Converter({ from: dir.from, to: dir.to });
+      if (isPreset) {
+        const r2 = convertPreset(doc, { convert, doRegex: $('#doRegex').checked });
+        doc = r2.preset;
+        say(`${dir.label.split('　')[0]}：${r2.changed.length} 處文字有變動`);
+        say(`已保護 ${(doc.prompts || []).length} 個提示詞識別碼與整份順序清單不被轉換`);
+      } else {
+        const r2 = convertCard(doc, { convert, doRegex: $('#doRegex').checked, kindOf });
+        doc = r2.card;
+        say(`${dir.label.split('　')[0]}：${r2.changed.length} 處文字有變動`);
+        say(`已保護 ${S.kinds.filter(k => k === 'data').length} 個資料條目的名稱與鍵名不被轉換`);
+      }
+    } else {
+      say('未進行繁簡轉換。');
+    }
+
+    S.out = doc;
+    const after = isPreset ? validatePreset(doc).issues : validate(doc, kindOf).issues;
+    const left = after.filter(i => i.level === 'error').length;
+    say(left ? `⚠ 仍有 ${left} 個功能失效問題未解決` : '✓ 已無功能失效問題');
+
+    S.report = buildReport(after, r1.done, dir);
+    $('#outsec').classList.remove('hidden');
+    renderReportAfter(after);
+    if (isPreset) renderMetaPreset(); else { renderMeta(); renderEntries(); }
+    renderAudit();
+  } catch (e) {
+    say('發生錯誤：' + e.message);
+    if (/OpenCC/.test(e.message)) say('詞庫需要網路載入。若無法連線，可改用「不轉換，只套用修正」。');
+  } finally {
+    btn.disabled = false; btn.textContent = '套用';
+  }
+}
+
+function renderReportAfter(after) {
+  S.issues = after;
+  const nE = after.filter(i => i.level === 'error').length;
+  $('#reportsub').innerHTML = nE
+    ? `套用後仍有 <b>${nE}</b> 個功能失效問題。`
+    : `套用後已無功能失效問題，餘下為建議與參考項。`;
+  const order = { error: 0, warn: 1, info: 2 };
+  const label = { error: '功能失效', warn: '建議處理', info: '參考' };
+  const sorted = [...after].sort((a, b) => order[a.level] - order[b.level]);
+  $('#report').innerHTML = after.length
+    ? '<ol class="errata">' + sorted.map(i => `<li class="${i.level}">
+        <div class="tt">${esc(i.title)}<span class="tag">${label[i.level]}</span></div>
+        <div class="dd">${esc(i.detail)}</div></li>`).join('') + '</ol>'
+    : '<div class="clean"><b>校對通過。</b></div>';
+}
+
+function buildReport(issues, done, dir) {
+  const L = [];
+  L.push('酒館卡片校對報告');
+  L.push('檔案：' + S.srcName);
+  L.push('時間：' + new Date().toLocaleString('zh-TW'));
+  L.push('轉換方向：' + dir.label);
+  L.push('');
+  L.push('── 已套用的修正 ──');
+  done.length ? done.forEach(d => L.push('  ・' + d)) : L.push('  （無）');
+  L.push('');
+  if (S.kind !== 'preset') {
+    L.push('── 條目分類 ──');
+    entriesOf().forEach((e, i) => L.push(`  [${S.kinds[i] === 'data' ? '資料' : '提示詞'}] ${e.comment}`));
+    L.push('');
+  }
+  if (S.audit) {
+    L.push('── 風險稽核 ──');
+    L.push(`  高風險 ${S.audit.stats.danger}　留意 ${S.audit.stats.warn}　未知網域 ${S.audit.stats.unknownHosts}`);
+    S.audit.remoteCode.forEach(x => L.push(`  ・遠端程式碼：${x.url}（${x.where}）`));
+    S.audit.findings.forEach(f => L.push(`  ・[${f.level}] ${f.label} @ ${f.where} x${f.count}`));
+    S.audit.hosts.forEach(x => L.push(`  ・網域 ${x.host}（${x.known ? '常見' : '未知'}）x${x.count}`));
+    L.push('');
+  }
+  L.push('── 剩餘項目 ──');
+  issues.length
+    ? issues.forEach(i => { L.push(`  [${i.level}] ${i.title}`); L.push('        ' + i.detail); })
+    : L.push('  （無）');
+  return L.join('\n');
+}
+
+/* ---------- 下載 ---------- */
+/** 匯出檔名：優先用轉換後的角色名，避免繁化後檔名還是簡體。 */
+function outName(suffix) {
+  let n = '';
+  if (S.kind === 'preset') n = '';
+  else { const d = (S.out || S.card)?.data || S.out || S.card || {}; n = (d.name || '').trim(); }
+  n = n.replace(/[\\/:*?"<>|]/g, '');
+  return (n || S.srcName || 'file') + suffix;
+}
+
+/** 匯出用的物件：世界書要還原成原本的結構。 */
+function exportObj() {
+  if (S.kind === 'worldbook') return unwrapWorldbook(S.wb, S.out || S.card, S.uids);
+  return S.out || S.preset || S.card;
+}
+
+function save(blob, name) {
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = u; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(u), 1500);
+}
+
+function bindExports() {
+  $('#dlPng').addEventListener('click', () => {
+    if (!S.isPng) return alert('這次載入的是 JSON，沒有可以寫回的 PNG。請用「下載 JSON」。');
+    const bytes = buildPng(S.chunks, S.out || S.card, S.hadCcv3);
+    save(new Blob([bytes], { type: 'image/png' }), outName('_校對.png'));
+  });
+  $('#dlJson').addEventListener('click', () => {
+    const j = JSON.stringify(exportObj(), null, 2);
+    save(new Blob([j], { type: 'application/json' }), outName('_校對.json'));
+  });
+  $('#dlRep').addEventListener('click', () => {
+    save(new Blob([S.report || '（尚未執行）'], { type: 'text/plain;charset=utf-8' }), outName('_校對報告.txt'));
+  });
+  $('#run').addEventListener('click', run);
+  $('#reset').addEventListener('click', () => { S.out = null; $('#file').value = ''; $('#file').click(); });
+}
+
+bindDrop(); bindExports();
+</script>
+</body>
+</html>
