@@ -273,7 +273,7 @@
 
 <div class="drop" id="drop" role="button" tabindex="0" aria-label="選擇角色卡檔案">
   <div class="drop-t">拖入角色卡，或點此選擇</div>
-  <div class="drop-s">角色卡 PNG／JSON・世界書 JSON・預設 JSON</div>
+  <div class="drop-s">角色卡 PNG／JSON・世界書 JSON・預設 JSON・正則腳本 JSON</div>
   <input type="file" id="file" accept=".png,.json">
 </div>
 
@@ -318,12 +318,13 @@
       <select id="dir" aria-label="轉換方向"></select>
     </div>
     <div class="warnbox" id="dirnote"></div>
-    <label class="ck" style="background:var(--leaf);box-shadow:var(--shadow)">
+    <label class="ck" id="doRegexRow" style="background:var(--leaf);box-shadow:var(--shadow)">
       <input type="checkbox" id="doRegex">
       <span>一併轉換正則表達式
         <small>正則要跟 AI 輸出一致，通常該轉。但 replaceString 裡常含 HTML/CSS/JS，轉換後請自行檢查一次。</small>
       </span>
     </label>
+
     <div class="row" style="margin-top:18px">
       <button class="act primary" id="run">套用</button>
       <button class="act" id="reset">重新載入檔案</button>
@@ -578,7 +579,13 @@ function protectedConvert(text, convert, protectors) {
   }
   work = convert(work);
   // 哨兵可能被轉換器改動數字以外的部分，故用寬鬆比對還原
-  work = work.replace(/\uE000(\d+)\uE001/g, (_, n) => store[+n] ?? '');
+  // 要跑迴圈是因為保護片段會巢狀：<div style="color:#fff"> 的 #fff 先被 P_HEX
+  // 收走，整個標籤才被 P_TAG 收走；還原標籤後裡面才露出下一層哨兵，而
+  // String.replace 不會回頭掃自己剛插入的內容，只跑一次會把內層漏掉。
+  const HAS_SENTINEL = /\uE000\d+\uE001/;   // 不加 g，避免 test 動到 lastIndex
+  for (let guard = 0; guard < 10 && HAS_SENTINEL.test(work); guard++) {
+    work = work.replace(/\uE000(\d+)\uE001/g, (_, n) => store[+n] ?? '');
+  }
   return work;
 }
 
@@ -1037,10 +1044,94 @@ function autofix(cardIn, which, kindOf) {
 /** 判斷載入的 JSON 是哪一種檔案。 */
 function detectKind(o) {
   if (!o || typeof o !== 'object') return 'unknown';
+  if (isRegexFile(o)) return 'regex';
   if (Array.isArray(o.prompts) || 'prompt_order' in o || 'chat_completion_source' in o) return 'preset';
   if (o.spec || o.data?.description !== undefined || (o.name !== undefined && o.description !== undefined)) return 'card';
   if (o.entries && typeof o.entries === 'object') return 'worldbook';
   return 'unknown';
+}
+
+/* ---------- 獨立的正則腳本檔 ----------
+   酒館的正則是可以單獨匯出的，一個檔案可能是「一條」也可能是「一整包」。
+   繁化角色卡時，這些檔案不會跟著被轉，但 findRegex 要是還停在簡體，
+   AI 輸出繁體後就再也命中不了 —— 所以需要能單獨拿進來轉。          */
+
+/** 一條正則腳本的特徵：一定會有 findRegex 或 replaceString。 */
+const isRegexScript = x =>
+  !!x && typeof x === 'object' && !Array.isArray(x) &&
+  (typeof x.findRegex === 'string' || typeof x.replaceString === 'string');
+
+/** 單獨一條、或一整包陣列，兩種形狀都收。 */
+function isRegexFile(o) {
+  if (Array.isArray(o)) return o.length > 0 && o.every(isRegexScript);
+  return isRegexScript(o);
+}
+
+/** 一律轉成陣列處理；single 記住原本的形狀，匯出時要還原成一樣的。 */
+const normalizeRegexFile = o =>
+  Array.isArray(o) ? { list: o, single: false } : { list: [o], single: true };
+
+/* 比卡片內建正則的保護多了 P_TAG：{{getvar::變數名}} 這類巨集含中文，
+   被轉掉就查不到變數了。（卡片那條目前沒帶，是既有的漏洞。） */
+const RX_PROTECT = [P_URL, P_HEX, P_TAG, /<script[\s\S]*?<\/script>/gi];
+
+/** 轉換一整包正則腳本。回傳 { list, changed }，形狀跟 convertCard 一致。 */
+function convertRegexFile(listIn, opts) {
+  const list = JSON.parse(JSON.stringify(listIn));
+  const convert = opts.convert;
+  const changed = [];
+  const note = (where, before, after) => { if (before !== after) changed.push({ where, before, after }); };
+
+  list.forEach((r, i) => {
+    const tag = r.scriptName || `第 ${i + 1} 條`;
+    if (typeof r.scriptName === 'string' && r.scriptName) {
+      const v = convert(r.scriptName);                       // 顯示名稱，酒館靠 id 配對，轉了安全
+      note(`${tag}｜腳本名稱`, r.scriptName, v); r.scriptName = v;
+    }
+    for (const f of ['findRegex', 'replaceString']) {
+      if (typeof r[f] === 'string' && r[f]) {
+        const v = protectedConvert(r[f], convert, RX_PROTECT);
+        note(`${tag}｜${f}`, r[f], v); r[f] = v;
+      }
+    }
+    if (Array.isArray(r.trimStrings)) {
+      r.trimStrings = r.trimStrings.map((s, j) => {
+        if (typeof s !== 'string' || !s) return s;
+        const v = protectedConvert(s, convert, RX_PROTECT);
+        note(`${tag}｜trimStrings[${j}]`, s, v);
+        return v;
+      });
+    }
+  });
+  return { list, changed };
+}
+
+/** 正則檔的校對。重點是「轉換後還是不是一條能用的正則」。 */
+function validateRegexFile(list) {
+  const issues = [];
+  const add = (level, title, detail) => issues.push({ level, title, detail });
+
+  list.forEach((r, i) => {
+    const tag = r.scriptName || `第 ${i + 1} 條`;
+    const src = r.findRegex || '';
+    if (!src) {
+      add('warn', `「${tag}」沒有比對式`, 'findRegex 是空的，這條規則不會有任何作用。');
+      return;
+    }
+    // 酒館允許 /pattern/flags 的寫法，要先剝掉外層斜線再驗
+    const m = src.match(/^\/(.*)\/([a-z]*)$/s);
+    try { new RegExp(m ? m[1] : src, m ? m[2] : ''); }
+    catch (e) { add('error', `「${tag}」的比對式不是合法的正則`, e.message); }
+
+    if (/[\u4e00-\u9fff]/.test(src)) {
+      add('info', `「${tag}」的比對式含中文`,
+        '這條要命中，比對式的繁簡必須跟 AI 實際輸出的一致。轉換後請用實際對話確認一次。');
+    }
+    if (r.disabled) {
+      add('info', `「${tag}」目前是停用狀態`, '匯入酒館後記得手動打開，否則不會生效。');
+    }
+  });
+  return { issues };
 }
 
 /* ---------- 世界書 JSON ---------- */
@@ -1450,7 +1541,7 @@ async function load(file) {
   try {
     S.srcName = file.name.replace(/\.(png|json)$/i, '');
     const buf = await file.arrayBuffer();
-    S.wb = null; S.uids = null; S.preset = null; S.open = new Set();
+    S.wb = null; S.uids = null; S.preset = null; S.rx = null; S.open = new Set();
     if (/\.png$/i.test(file.name)) {
       const r = extractCard(buf);
       S.card = r.card; S.chunks = r.chunks; S.hadCcv3 = r.hadCcv3; S.isPng = true;
@@ -1460,12 +1551,16 @@ async function load(file) {
       S.isPng = false; S.chunks = null;
       S.kind = detectKind(obj);
       if (S.kind === 'preset') { S.preset = obj; S.card = null; }
+      else if (S.kind === 'regex') {
+        const n = normalizeRegexFile(obj);
+        S.rx = n.list; S.rxSingle = n.single; S.card = null;
+      }
       else if (S.kind === 'worldbook') {
         S.wb = obj;
         const w = wrapWorldbook(obj);
         S.card = w.pseudo; S.uids = w.uids;
       } else if (S.kind === 'card') { S.card = obj; }
-      else throw new Error('無法辨識這個 JSON。支援角色卡、世界書、預設三種。');
+      else throw new Error('無法辨識這個 JSON。支援角色卡、世界書、預設、正則腳本四種。');
     }
     S.out = null;
     $('#app').classList.remove('hidden');
@@ -1475,10 +1570,15 @@ async function load(file) {
     $('#outsec').classList.add('hidden');
     $('#log').classList.add('hidden');
     if (S.kind === 'preset') { renderMetaPreset(); renderReport(); renderFixes(); renderDirs(); }
+    else if (S.kind === 'regex') { renderMetaRegex(); renderReport(); renderFixes(); renderDirs(); }
     else { initKinds(); renderMeta(); renderEntries(); renderReport(); renderFixes(); renderDirs(); }
     renderAudit();
-    $('#entsec').classList.toggle('hidden', S.kind === 'preset');
-    $('#kindtag').textContent = { card: '角色卡', worldbook: '世界書', preset: '預設' }[S.kind] || '';
+    // 正則檔跟預設一樣沒有「條目」可以列
+    $('#entsec').classList.toggle('hidden', S.kind === 'preset' || S.kind === 'regex');
+    // 正則檔整份都是正則，這個「要不要一併轉正則」的選項就沒有意義了
+    $('#doRegexRow').classList.toggle('hidden', S.kind === 'regex');
+    $('#kindtag').textContent =
+      { card: '角色卡', worldbook: '世界書', preset: '預設', regex: '正則腳本' }[S.kind] || '';
     $('#app').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     alert('讀取失敗：' + e.message);
@@ -1528,6 +1628,18 @@ function renderMetaPreset() {
     ['提示詞', ps.length, ''],
     ['已啟用', ps.filter(x => enabled.has(x.identifier)).length, ''],
     ['中文識別碼', ps.filter(x => /[\u4e00-\u9fff]/.test(x.identifier || '')).length, ''],
+  ];
+  $('#meta').innerHTML = cells.map(([t, v, c]) =>
+    `<div><dt>${t}</dt><dd class="${c}">${esc(v)}</dd></div>`).join('');
+}
+
+function renderMetaRegex() {
+  const list = S.out || S.rx || [];
+  const cells = [
+    ['正則腳本', list.length, ''],
+    ['已啟用', list.filter(r => !r.disabled).length, ''],
+    ['比對式含中文', list.filter(r => /[\u4e00-\u9fff]/.test(r.findRegex || '')).length, ''],
+    ['有取代內容', list.filter(r => (r.replaceString || '').length > 0).length, ''],
   ];
   $('#meta').innerHTML = cells.map(([t, v, c]) =>
     `<div><dt>${t}</dt><dd class="${c}">${esc(v)}</dd></div>`).join('');
@@ -1634,6 +1746,8 @@ function diffPairs(detail) {
 function renderReport() {
   const { issues } = S.kind === 'preset'
     ? validatePreset(S.out || S.preset)
+    : S.kind === 'regex'
+    ? validateRegexFile(S.out || S.rx || [])
     : validate(S.out || S.card, kindOf);
   S.issues = issues;
   const nE = issues.filter(i => i.level === 'error').length;
@@ -1664,7 +1778,9 @@ function renderReport() {
 
 /* ---------- 風險稽核 ---------- */
 function renderAudit() {
+  // 正則檔包成稽核看得懂的形狀，就能沿用既有的 replaceString 掃描
   const doc = S.kind === 'preset' ? (S.out || S.preset)
+            : S.kind === 'regex' ? { extensions: { regex_scripts: S.out || S.rx || [] } }
             : S.kind === 'worldbook' ? (S.wb ? (S.out ? unwrapWorldbook(S.wb, S.out, S.uids) : S.wb) : null)
             : (S.out || S.card);
   if (!doc) return;
@@ -1717,7 +1833,13 @@ function renderAudit() {
 function renderFixes() {
   const codes = new Set((S.issues || []).map(i => i.fix).filter(Boolean));
   const typos = (S.issues || []).filter(i => i.fix === 'typo');
-  const list = S.kind === 'preset' ? FIXES_PRESET : FIXES;
+  // 正則檔沒有「自動修正」可做 —— 它要的就只是轉換，所以給空清單
+  const list = S.kind === 'preset' ? FIXES_PRESET : S.kind === 'regex' ? [] : FIXES;
+  if (!list.length) {
+    $('#fixes').innerHTML =
+      '<div class="clean">這個檔案沒有可自動套用的修正項，直接選轉換方向即可。</div>';
+    return;
+  }
   $('#fixes').innerHTML = list.map(f => {
     const rel = codes.has(f.k);
     let extra = '';
@@ -1766,11 +1888,17 @@ async function run() {
     }
     const dir = DIRS.find(d => d.id === $('#dir').value);
     const isPreset = S.kind === 'preset';
-    let doc = isPreset ? S.preset : S.card;
+    const isRegex = S.kind === 'regex';
+    let doc = isRegex ? S.rx : isPreset ? S.preset : S.card;
 
-    const r1 = isPreset ? autofixPreset(doc, which) : autofix(doc, which, kindOf);
-    doc = isPreset ? r1.preset : r1.card;
+    // 正則檔沒有自動修正可套，直接跳過這一段
+    let r1 = { done: [] };
+    if (!isRegex) {
+      r1 = isPreset ? autofixPreset(doc, which) : autofix(doc, which, kindOf);
+      doc = isPreset ? r1.preset : r1.card;
+    }
     if (r1.done.length) { say(`已套用 ${r1.done.length} 項修正：`); r1.done.forEach(d => say('　' + d)); }
+    else if (isRegex) say('正則腳本檔沒有可自動套用的修正，只做轉換。');
     else say('沒有套用任何修正（未勾選，或這個檔案沒有這些問題）。');
 
     if (dir.from) {
@@ -1778,15 +1906,22 @@ async function run() {
       const OC = await loadOpenCC();
       buildReverseIndex(OC);
       const convert = OC.Converter({ from: dir.from, to: dir.to });
-      if (isPreset) {
+      const what = dir.label.split('　')[0];
+
+      if (isRegex) {
+        const r2 = convertRegexFile(doc, { convert });
+        doc = r2.list;
+        say(`${what}：${r2.changed.length} 處文字有變動`);
+        say('已保護 {{巨集}}、HTML 標籤、網址與色碼不被轉換');
+      } else if (isPreset) {
         const r2 = convertPreset(doc, { convert, doRegex: $('#doRegex').checked });
         doc = r2.preset;
-        say(`${dir.label.split('　')[0]}：${r2.changed.length} 處文字有變動`);
+        say(`${what}：${r2.changed.length} 處文字有變動`);
         say(`已保護 ${(doc.prompts || []).length} 個提示詞識別碼與整份順序清單不被轉換`);
       } else {
         const r2 = convertCard(doc, { convert, doRegex: $('#doRegex').checked, kindOf });
         doc = r2.card;
-        say(`${dir.label.split('　')[0]}：${r2.changed.length} 處文字有變動`);
+        say(`${what}：${r2.changed.length} 處文字有變動`);
         say(`已保護 ${S.kinds.filter(k => k === 'data').length} 個資料條目的名稱與鍵名不被轉換`);
       }
     } else {
@@ -1794,14 +1929,18 @@ async function run() {
     }
 
     S.out = doc;
-    const after = isPreset ? validatePreset(doc).issues : validate(doc, kindOf).issues;
+    const after = isRegex ? validateRegexFile(doc).issues
+                : isPreset ? validatePreset(doc).issues
+                : validate(doc, kindOf).issues;
     const left = after.filter(i => i.level === 'error').length;
     say(left ? `⚠ 仍有 ${left} 個功能失效問題未解決` : '✓ 已無功能失效問題');
 
     S.report = buildReport(after, r1.done, dir);
     $('#outsec').classList.remove('hidden');
     renderReportAfter(after);
-    if (isPreset) renderMetaPreset(); else { renderMeta(); renderEntries(); }
+    if (isRegex) renderMetaRegex();
+    else if (isPreset) renderMetaPreset();
+    else { renderMeta(); renderEntries(); }
     renderAudit();
   } catch (e) {
     say('發生錯誤：' + e.message);
@@ -1837,7 +1976,7 @@ function buildReport(issues, done, dir) {
   L.push('── 已套用的修正 ──');
   done.length ? done.forEach(d => L.push('  ・' + d)) : L.push('  （無）');
   L.push('');
-  if (S.kind !== 'preset') {
+  if (S.kind === 'card' || S.kind === 'worldbook') {
     L.push('── 條目分類 ──');
     entriesOf().forEach((e, i) => L.push(`  [${S.kinds[i] === 'data' ? '資料' : '提示詞'}] ${e.comment}`));
     L.push('');
@@ -1861,15 +2000,19 @@ function buildReport(issues, done, dir) {
 /** 匯出檔名：優先用轉換後的角色名，避免繁化後檔名還是簡體。 */
 function outName(suffix) {
   let n = '';
-  if (S.kind === 'preset') n = '';
+  if (S.kind === 'preset' || S.kind === 'regex') n = '';   // 這兩種沿用原始檔名就好
   else { const d = (S.out || S.card)?.data || S.out || S.card || {}; n = (d.name || '').trim(); }
   n = n.replace(/[\\/:*?"<>|]/g, '');
   return (n || S.srcName || 'file') + suffix;
 }
 
-/** 匯出用的物件：世界書要還原成原本的結構。 */
+/** 匯出用的物件：世界書要還原成原本的結構，正則檔要還原成原本是單條還是一整包。 */
 function exportObj() {
   if (S.kind === 'worldbook') return unwrapWorldbook(S.wb, S.out || S.card, S.uids);
+  if (S.kind === 'regex') {
+    const list = S.out || S.rx || [];
+    return S.rxSingle ? list[0] : list;
+  }
   return S.out || S.preset || S.card;
 }
 
