@@ -31,17 +31,22 @@ function fixture(name) {
 
 function installDomStub(context) {
   const listeners = new Map();
-  const element = {
-    value: '', checked: false, disabled: false, innerHTML: '', textContent: '', onchange: null,
-    style: {}, files: [], classList: { add() {}, remove() {}, toggle() {} },
-    addEventListener(type, fn) { listeners.set(type, fn); },
-    querySelectorAll() { return []; },
-    querySelector() { return null; },
-    setAttribute() {}, insertAdjacentHTML() {}, scrollIntoView() {}, click() {},
+  const elements = new Map();
+  const makeElement = () => ({
+      value: '', checked: false, disabled: false, innerHTML: '', textContent: '', onchange: null, open: false,
+      style: {}, files: [], classList: { add() {}, remove() {}, toggle() {} },
+      addEventListener(type, fn) { listeners.set(type, fn); },
+      querySelectorAll() { return []; },
+      querySelector() { return null; },
+      setAttribute() {}, insertAdjacentHTML() {}, scrollIntoView() {}, click() {},
+    });
+  const getElement = selector => {
+    if (!elements.has(selector)) elements.set(selector, makeElement());
+    return elements.get(selector);
   };
   context.document = {
-    querySelector() { return element; },
-    createElement() { return { ...element, classList: element.classList }; },
+    querySelector(selector) { return getElement(selector); },
+    createElement() { return makeElement(); },
     head: { appendChild() {} }, body: { appendChild() {} }, execCommand() { return true; },
   };
   context.navigator = { clipboard: { async writeText() {} } };
@@ -50,7 +55,7 @@ function installDomStub(context) {
   context.setTimeout = setTimeout;
   context.clearTimeout = clearTimeout;
   context.URL = { createObjectURL: () => 'blob:test', revokeObjectURL() {} };
-  return element;
+  return { elements, getElement };
 }
 
 test('all inline scripts parse without rebuilding the OpenCC bundle', () => {
@@ -87,6 +92,22 @@ test('UI bridge initializes and loads a character-card fixture without a runtime
 
   const regexBytes = new TextEncoder().encode(JSON.stringify([{ scriptName: '測試', findRegex: '/信息/g', replaceString: '資訊' }]));
   await assert.doesNotReject(() => context.load({ name: 'regex.json', async arrayBuffer() { return regexBytes.buffer; } }));
+});
+
+test('after conversion the workbench displays the converted traditional entry content', async () => {
+  const context = makeContext();
+  const dom = installDomStub(context);
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  vm.runInContext(scripts[1], context, { filename: 'index-ui.js' });
+  const bytes = new TextEncoder().encode(JSON.stringify(fixture('character-card.json')));
+  await context.STProofreadingUI.load({ name: 'character-card.json', async arrayBuffer() { return bytes.buffer; } });
+  dom.getElement('#dir').value = 'cn2tw';
+
+  assert.match(context.STProofreadingUI.getWorkingEntries()[0].content, /角色皮肤/);
+  await context.STProofreadingUI.run();
+  assert.equal(context.STProofreadingUI.getViewMode(), 'output');
+  assert.match(context.STProofreadingUI.getDisplayedEntries()[0].content, /角色皮膚/);
+  assert.match(context.STProofreadingUI.getWorkingEntries()[0].content, /角色皮肤/);
 });
 
 test('standalone worldbook keeps disable semantics and every unknown field', () => {
