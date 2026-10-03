@@ -1,0 +1,32 @@
+{
+  "name": "語境測試世界書",
+  "entries": {
+    "101": {
+      "uid": 101,
+      "comment": "城市資料",
+      "content": "入住市中心的酒店。\n他晚上在酒店上班。\n[設定]\n颜色=#fff",
+      "key": ["城市", "酒店"],
+      "disable": false,
+      "constant": false,
+      "order": 30,
+      "position": 0,
+      "probability": 75,
+      "strategy": "selective",
+      "extensions": { "position": 0, "depth": 4, "vendor_flag": "keep-me" },
+      "unknown_top_level": { "nested": true }
+    },
+    "205": {
+      "uid": 205,
+      "comment": "停用但仍須校對",
+      "content": "他總是冷著一張冷面。\n晚上一起去吃冷面。\n系統返回錯誤信息。",
+      "key": ["測試"],
+      "disable": true,
+      "constant": false,
+      "order": 31,
+      "position": 1,
+      "probability": 100,
+      "extensions": { "custom": [1, 2, 3] }
+    }
+  },
+  "custom_book_field": "must-survive"
+}

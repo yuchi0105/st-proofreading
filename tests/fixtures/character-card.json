@@ -1,0 +1,52 @@
+{
+  "spec": "chara_card_v3",
+  "spec_version": "3.0",
+  "data": {
+    "name": "測試角色",
+    "description": "保留 {{user}} / {{char}} 與 emoji 🥂",
+    "first_mes": "你好，{{user}}。",
+    "character_book": {
+      "name": "內嵌語境書",
+      "entries": [
+        {
+          "id": 1,
+          "comment": "語境混合",
+          "content": "他總是冷著一張冷面。\n晚上一起去吃冷面。\n這裡不准進入。\n這個數值不准。\n他們入住市中心的酒店。\n他晚上在酒店上班。\n系統返回錯誤信息。\n請傳一則信息給我。\n角色皮肤很蒼白。\n商城新增角色皮肤。\n<div class=\"box\">{{user}} 😀</div>\n<style>.皮肤{color:#fff}</style>\n<script>const 信息 = /冷面/g;</script>\n/^酒店(?:入住|上班)$/u",
+          "keys": ["混合", "冷面"],
+          "secondary_keys": ["信息"],
+          "enabled": true,
+          "insertion_order": 9,
+          "probability": 100,
+          "extensions": { "position": 4, "depth": 4, "unknown": "keep" }
+        },
+        {
+          "id": 2,
+          "comment": "空白條目",
+          "content": "",
+          "enabled": false,
+          "extensions": { "legacy": true },
+          "unknown_optional": 42
+        },
+        {
+          "comment": "舊格式缺欄位",
+          "content": "多行正文第一行\n第二行 🧋\n{{char}}",
+          "key": "舊格式,測試"
+        }
+      ]
+    },
+    "extensions": {
+      "regex_scripts": [
+        {
+          "id": "rx-1",
+          "scriptName": "酒店偵測",
+          "findRegex": "/酒店|冷面/g",
+          "replaceString": "<span class=\"皮肤\">$&</span>",
+          "disabled": false,
+          "unknown": "keep"
+        }
+      ],
+      "unknown_extension": { "value": true }
+    },
+    "unknown_card_field": ["preserve", 1]
+  }
+}
