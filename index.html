@@ -23,7 +23,7 @@
     font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
     font-size:15px;line-height:1.65;
   }
-  .wrap{max-width:860px;margin:0 auto;padding:34px 18px 90px}
+  .wrap{max-width:980px;margin:0 auto;padding:26px 18px 72px}
   .serif{font-family:"Songti TC","Noto Serif TC","Source Han Serif TC",Georgia,"Times New Roman",serif}
   .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 
@@ -42,7 +42,7 @@
 
   /* ---------- drop zone: paste-up box ---------- */
   .drop{
-    margin:0 0 26px;padding:34px 20px;text-align:center;
+    margin:0 0 20px;padding:24px 20px;text-align:center;
     background:var(--leaf);border:1.5px dashed var(--rule);cursor:pointer;
     transition:border-color .15s,background .15s
   }
@@ -54,7 +54,7 @@
   input[type=file]{display:none}
 
   /* ---------- sections ---------- */
-  section{margin:0 0 30px}
+  section{margin:0 0 22px}
   h2{
     font-family:"Songti TC","Noto Serif TC",Georgia,serif;
     font-size:13px;letter-spacing:.16em;margin:0 0 3px;font-weight:600;
@@ -70,6 +70,29 @@
   .meta dt{font-size:11px;letter-spacing:.1em;color:var(--soft);margin-bottom:3px}
   .meta dd{margin:0;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
   .meta dd.sm{font-size:15px;font-weight:600}
+
+  /* ---------- compact conversion panel ---------- */
+  .convert-panel{
+    position:relative;background:#202724;color:var(--leaf);padding:15px 16px;
+    box-shadow:0 12px 30px -22px rgba(0,0,0,.8);border-top:3px solid var(--pen)
+  }
+  .convert-panel h2{color:#fff;margin-bottom:10px}
+  .convert-row{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:8px;align-items:stretch}
+  .convert-row select{max-width:none;min-height:48px;border:0}
+  .convert-row .act{min-height:48px;padding:10px 18px;white-space:nowrap}
+  .convert-state{margin:8px 0 0;font-size:12px;color:#bac4bf}
+  .convert-state.done{color:#b9e3d2}
+  .convert-options{margin-top:10px;border-top:1px solid rgba(255,255,255,.16)}
+  .convert-options>summary{
+    list-style:none;cursor:pointer;min-height:44px;display:flex;align-items:center;gap:7px;
+    color:#d8dfdc;font-size:12px
+  }
+  .convert-options>summary::-webkit-details-marker{display:none}
+  .convert-options>summary::before{content:'＋';color:#f0b053;font-size:16px}
+  .convert-options[open]>summary::before{content:'－'}
+  .convert-options-body{background:var(--paper);color:var(--ink);padding:12px;margin:0 -6px -6px}
+  .convert-options-body .apply-summary{margin-bottom:10px}
+  .convert-options-body .warnbox{margin-bottom:10px}
 
   /* ---------- entry classification ---------- */
   .ent{
@@ -129,12 +152,17 @@
     font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
     font-size:12px;line-height:1.62;white-space:pre-wrap;word-break:break-word
   }
+  .work-topline{display:flex;gap:10px;align-items:stretch;margin-bottom:10px}
   .work-status{
-    display:flex;flex-wrap:wrap;gap:7px 16px;margin:0 0 12px;padding:10px 13px;
+    flex:1;display:flex;flex-wrap:wrap;gap:7px 16px;margin:0;padding:10px 13px;
     background:#fff;border:1px solid var(--rule);font-size:12px;color:var(--soft)
   }
   .work-status b{color:var(--ink);font-variant-numeric:tabular-nums}
-  .work-toolbar{display:grid;grid-template-columns:minmax(180px,1fr) auto;gap:10px;margin-bottom:12px}
+  .view-switch{display:flex;border:1px solid var(--rule);background:#fff}
+  .view-switch button{min-height:44px;padding:7px 11px;border:0;background:#fff;color:var(--soft);font:inherit;font-size:12px;cursor:pointer}
+  .view-switch button[aria-pressed=true]{background:var(--pass);color:#fff}
+  .view-switch button:disabled{color:#abb2ae;cursor:not-allowed}
+  .work-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:8px;margin-bottom:10px;align-items:start}
   .work-search{
     width:100%;min-height:44px;padding:8px 11px;border:1px solid var(--rule);
     background:#fff;color:var(--ink);font:inherit;font-size:13px
@@ -146,6 +174,10 @@
   }
   .filterbar button[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--leaf)}
   .filterbar button:hover,.minor:hover{border-color:var(--pen);color:var(--pen)}
+  .filter-menu{position:relative}
+  .filter-menu>summary{list-style:none;min-height:44px;padding:8px 13px;border:1px solid var(--rule);background:var(--leaf);font-size:12px;cursor:pointer;display:flex;align-items:center}
+  .filter-menu>summary::-webkit-details-marker{display:none}
+  .filter-menu[open] .filterbar{position:absolute;z-index:5;right:0;top:48px;width:min(420px,calc(100vw - 36px));padding:8px;background:#fff;border:1px solid var(--rule);box-shadow:var(--shadow)}
   .minor.danger{color:var(--pen)}
   .ent-wrap.is-off{opacity:.58}
   .ent-wrap.is-off:focus-within,.ent-wrap.is-off:hover{opacity:.82}
@@ -176,11 +208,15 @@
   .advanced{border:1px solid var(--rule);background:#fff;padding:8px 10px}
   .advanced summary{cursor:pointer;color:var(--soft);font-size:12px}
   .data-risk{margin:8px 0 0;border-left:3px solid var(--amber);background:#faf6ec;padding:8px 10px;color:#5f4a17;font-size:11.5px}
-  .confirm-box{margin:0 0 14px;background:var(--leaf);box-shadow:var(--shadow)}
-  .confirm-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border-bottom:1px solid var(--rule)}
+  .confirm-box{margin:0 0 12px;background:var(--leaf);box-shadow:var(--shadow)}
+  .confirm-head{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border-bottom:1px solid var(--rule)}
   .confirm-head b{font-size:13px}
-  .confirm-item{padding:13px;border-bottom:1px solid var(--rule)}
+  .confirm-list{max-height:560px;overflow:auto}
+  .confirm-item{padding:0;border-bottom:1px solid var(--rule)}
   .confirm-item:last-child{border-bottom:0}
+  .confirm-item>summary{cursor:pointer;padding:10px 13px;display:flex;justify-content:space-between;gap:10px;font-size:12px}
+  .confirm-item>summary .term{color:var(--amber);font-weight:600}
+  .confirm-item-body{padding:0 13px 13px}
   .confirm-meta{font-size:11.5px;color:var(--soft);margin-bottom:5px}
   .confirm-context{padding:8px 10px;background:#fff;border:1px solid var(--rule);font-size:12.5px;white-space:pre-wrap;word-break:break-word}
   .confirm-context mark{background:#f5df9a;color:var(--ink);padding:0 2px}
@@ -196,6 +232,16 @@
   .summary-grid b{color:var(--ink)}
   .summary-diff{margin-top:9px;padding-top:8px;border-top:1px dotted var(--rule);font-size:11.5px;color:var(--soft);max-height:150px;overflow:auto}
   .summary-diff div{padding:2px 0}
+  .result-note{margin:0 0 8px;padding:8px 10px;background:#edf7f2;border-left:3px solid var(--pass);font-size:12px;color:var(--pass)}
+
+  .fold-section{background:var(--leaf);box-shadow:var(--shadow)}
+  .fold-section>summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;align-items:center;gap:12px}
+  .fold-section>summary::-webkit-details-marker{display:none}
+  .fold-section>summary h2{margin:0;flex:none}
+  .fold-section>summary .h2sub{margin:0;padding:0;border:0;flex:1;text-align:right}
+  .fold-section>summary::after{content:'＋';color:var(--soft);font-size:18px}
+  .fold-section[open]>summary::after{content:'－'}
+  .fold-body{padding:0 14px 14px}
 
   /* ---------- errata: the signature ---------- */
   .errata{list-style:none;margin:0;padding:0;counter-reset:e}
@@ -323,11 +369,19 @@
     .entd{padding-left:13px}
     .entd-row{flex-wrap:wrap;gap:3px}
     .entd-lab{flex:1 1 100%}
-    .work-toolbar{grid-template-columns:1fr}
+    .convert-row{grid-template-columns:1fr 1fr}
+    .convert-row select{grid-column:1/-1}
+    .convert-row .act{padding:9px 10px}
+    .work-topline{display:block}
+    .view-switch{margin-top:7px}
+    .view-switch button{flex:1}
+    .work-toolbar{grid-template-columns:1fr auto}
     .filterbar button{flex:1 1 auto}
     .ent-headbadges{order:3;flex:1 1 100%;padding-left:20px}
     .switch{margin-left:auto}
     .confirm-candidates button{flex:1 1 auto}
+    .fold-section>summary{align-items:flex-start;flex-wrap:wrap}
+    .fold-section>summary .h2sub{flex:1 1 100%;text-align:left;padding-left:21px}
   }
 </style>
 </head>
@@ -357,26 +411,60 @@
     <div class="meta" id="meta"></div>
   </section>
 
+  <section class="convert-panel" id="convertsec">
+    <h2>轉換操作</h2>
+    <div class="convert-row">
+      <select id="dir" aria-label="轉換方向"></select>
+      <button class="act primary" id="run">套用轉換</button>
+      <button class="act" id="reset">重新載入</button>
+    </div>
+    <p class="convert-state" id="runState">設定好條目後即可套用；完成時工作台會直接顯示轉換結果。</p>
+    <details class="convert-options" id="convertOptions">
+      <summary>修正選項、轉換說明與修改摘要</summary>
+      <div class="convert-options-body">
+        <div class="apply-summary" id="applySummary"></div>
+        <div class="box" id="fixes"></div>
+        <div class="warnbox" id="dirnote"></div>
+        <label class="ck" id="doRegexRow" style="background:var(--leaf);box-shadow:var(--shadow)">
+          <input type="checkbox" id="doRegex">
+          <span>一併轉換正則表達式
+            <small>正則要跟 AI 輸出一致，通常該轉。但 replaceString 裡常含 HTML/CSS/JS，轉換後請自行檢查一次。</small>
+          </span>
+        </label>
+        <div class="log hidden" id="log"></div>
+      </div>
+    </details>
+  </section>
+
   <section id="entsec">
     <h2><span class="n">02</span>條目工作台 <span class="kindtag hidden" id="confirmBadge"></span></h2>
     <p class="h2sub">
       <b>資料</b>＝腳本讀取，名稱與鍵名必須維持簡體。<b>提示詞</b>＝AI 讀取，全部轉成繁體。
       可在這裡調整分類、啟用狀態與內容；停用條目仍會接受校對與繁簡轉換。
     </p>
-    <div class="work-status" id="workStatus"></div>
-    <div class="work-toolbar" id="workToolbar">
-      <input class="work-search" id="entrySearch" type="search" placeholder="搜尋條目名稱、關鍵詞或正文" aria-label="搜尋條目">
-      <div class="filterbar" id="entryFilters" aria-label="條目篩選">
-        <button type="button" data-filter="status" data-value="all" aria-pressed="true">全部</button>
-        <button type="button" data-filter="status" data-value="enabled" aria-pressed="false">啟用</button>
-        <button type="button" data-filter="status" data-value="disabled" aria-pressed="false">停用</button>
-        <button type="button" data-filter="kind" data-value="data" aria-pressed="false">資料</button>
-        <button type="button" data-filter="kind" data-value="prompt" aria-pressed="false">提示詞</button>
-        <button type="button" data-filter="confirm" data-value="true" aria-pressed="false">需要確認</button>
-        <button type="button" data-filter="modified" data-value="true" aria-pressed="false">已修改</button>
+    <div class="work-topline">
+      <div class="work-status" id="workStatus"></div>
+      <div class="view-switch" id="viewSwitch" aria-label="條目內容檢視">
+        <button type="button" data-view="work" aria-pressed="true">編輯中</button>
+        <button type="button" data-view="output" aria-pressed="false" disabled>轉換結果</button>
       </div>
     </div>
-    <div class="confirm-box hidden" id="ambiguities"></div>
+    <div class="work-toolbar" id="workToolbar">
+      <input class="work-search" id="entrySearch" type="search" placeholder="搜尋條目名稱、關鍵詞或正文" aria-label="搜尋條目">
+      <details class="filter-menu">
+        <summary>搜尋與篩選</summary>
+        <div class="filterbar" id="entryFilters" aria-label="條目篩選">
+          <button type="button" data-filter="status" data-value="all" aria-pressed="true">全部</button>
+          <button type="button" data-filter="status" data-value="enabled" aria-pressed="false">啟用</button>
+          <button type="button" data-filter="status" data-value="disabled" aria-pressed="false">停用</button>
+          <button type="button" data-filter="kind" data-value="data" aria-pressed="false">資料</button>
+          <button type="button" data-filter="kind" data-value="prompt" aria-pressed="false">提示詞</button>
+          <button type="button" data-filter="confirm" data-value="true" aria-pressed="false">需要確認</button>
+          <button type="button" data-filter="modified" data-value="true" aria-pressed="false">已修改</button>
+        </div>
+      </details>
+    </div>
+    <details class="confirm-box hidden" id="ambiguities"></details>
     <div class="ent-tools" id="enttools">
       <button type="button" id="expandAll">全部展開</button>
       <button type="button" id="collapseAll">全部收合</button>
@@ -386,42 +474,21 @@
   </section>
 
   <section>
-    <h2><span class="n">03</span>校對報告</h2>
-    <p class="h2sub" id="reportsub"></p>
-    <div id="report"></div>
+    <details class="fold-section" id="reportFold">
+      <summary><h2><span class="n">03</span>校對報告</h2><span class="h2sub" id="reportsub"></span></summary>
+      <div class="fold-body" id="report"></div>
+    </details>
   </section>
 
   <section>
-    <h2><span class="n">04</span>風險稽核</h2>
-    <p class="h2sub" id="auditsub"></p>
-    <div id="audit"></div>
-  </section>
-
-  <section>
-    <h2><span class="n">05</span>修正與轉換</h2>
-    <p class="h2sub">勾選要套用的修正，選擇轉換方向。</p>
-    <div class="apply-summary" id="applySummary"></div>
-    <div class="box" id="fixes"></div>
-    <div class="row" style="margin-top:16px">
-      <select id="dir" aria-label="轉換方向"></select>
-    </div>
-    <div class="warnbox" id="dirnote"></div>
-    <label class="ck" id="doRegexRow" style="background:var(--leaf);box-shadow:var(--shadow)">
-      <input type="checkbox" id="doRegex">
-      <span>一併轉換正則表達式
-        <small>正則要跟 AI 輸出一致，通常該轉。但 replaceString 裡常含 HTML/CSS/JS，轉換後請自行檢查一次。</small>
-      </span>
-    </label>
-
-    <div class="row" style="margin-top:18px">
-      <button class="act primary" id="run">套用</button>
-      <button class="act" id="reset">重新載入檔案</button>
-    </div>
-    <div class="log hidden" id="log"></div>
+    <details class="fold-section" id="auditFold">
+      <summary><h2><span class="n">04</span>風險稽核</h2><span class="h2sub" id="auditsub"></span></summary>
+      <div class="fold-body" id="audit"></div>
+    </details>
   </section>
 
   <section id="outsec" class="hidden">
-    <h2><span class="n">06</span>匯出</h2>
+    <h2><span class="n">05</span>匯出</h2>
     <p class="h2sub">匯入前建議先備份原卡，方便對照。</p>
     <div class="row">
       <button class="act" id="dlPng">下載 PNG</button>
@@ -1746,7 +1813,7 @@ let S = {
   card: null, originalCard: null, originalSource: null, out: null, report: '',
   kinds: [], open: new Set(), statusFields: [], decisions: new Map(), ambiguities: [],
   editing: null, filters: { search: '', status: 'all', kind: 'all', confirm: false, modified: false },
-  previewConvert: null, lastRun: null,
+  previewConvert: null, lastRun: null, viewMode: 'work',
 };
 
 /* ---------- OpenCC ---------- */
@@ -1792,9 +1859,13 @@ async function load(file) {
     const buf = await file.arrayBuffer();
     S.srcBuf = buf;
     S.wb = null; S.uids = null; S.preset = null; S.rx = null; S.open = new Set();
-    S.decisions = new Map(); S.ambiguities = []; S.editing = null; S.previewConvert = null; S.lastRun = null;
+    S.decisions = new Map(); S.ambiguities = []; S.editing = null; S.previewConvert = null; S.lastRun = null; S.viewMode = 'work';
     S.filters = { search: '', status: 'all', kind: 'all', confirm: false, modified: false };
     $('#entrySearch').value = '';
+    $('#reportFold').open = false;
+    $('#auditFold').open = false;
+    $('#convertOptions').open = false;
+    $('#ambiguities').open = false;
     if (/\.png$/i.test(file.name)) {
       const r = extractCard(buf);
       S.originalSource = cloneData(r.card); S.card = cloneData(r.card);
@@ -1830,6 +1901,8 @@ async function load(file) {
                 .catch(() => {});
     $('#outsec').classList.add('hidden');
     $('#log').classList.add('hidden');
+    $('#runState').textContent = '設定好條目後即可套用；完成時工作台會直接顯示轉換結果。';
+    $('#runState').classList.remove('done');
     if (S.kind === 'preset') { renderMetaPreset(); renderReport(); renderFixes(); renderDirs(); renderApplySummary(); }
     else if (S.kind === 'regex') { renderMetaRegex(); renderReport(); renderFixes(); renderDirs(); renderApplySummary(); }
     else {
@@ -1839,6 +1912,7 @@ async function load(file) {
       renderReport(); renderFixes(); renderDirs(); renderApplySummary();
     }
     renderAudit();
+    updateViewSwitch();
     // 正則檔跟預設一樣沒有「條目」可以列
     $('#entsec').classList.toggle('hidden', S.kind === 'preset' || S.kind === 'regex');
     // 正則檔整份都是正則，這個「要不要一併轉正則」的選項就沒有意義了
@@ -1853,6 +1927,8 @@ async function load(file) {
 
 const viewCard = () => S.out || S.card;
 const entriesOf = (card = S.card) => (card?.data || card || {}).character_book?.entries || [];
+const displayedCard = () => S.viewMode === 'output' && S.out ? S.out : S.card;
+const displayedEntriesOf = () => entriesOf(displayedCard());
 const originalEntriesOf = () => entriesOf(S.originalCard);
 function initKinds() { S.kinds = entriesOf().map(e => classifyEntry(e).kind); }
 const kindOf = (e, i) => S.kinds[i] || 'prompt';
@@ -2006,7 +2082,8 @@ function entryEditor(e, i) {
 
 /** 展開後顯示的條目細節。只有展開中的條目才會產生這段 HTML。 */
 function entryDetail(e, i) {
-  if (S.editing === i) return entryEditor(e, i);
+  const showingOutput = S.viewMode === 'output' && !!S.out;
+  if (!showingOutput && S.editing === i) return entryEditor(e, i);
   const chips = a => a.length
     ? a.map(k => `<code class="chip">${esc(k)}</code>`).join('')
     : '<span class="none">（無）</span>';
@@ -2032,20 +2109,22 @@ function entryDetail(e, i) {
     ['內容', `<span class="entd-meta">${content.length} 字元・${content ? content.split('\n').length : 0} 行</span>`],
   ].filter(Boolean);
 
-  return rows.map(([lab, val]) =>
+  return (showingOutput ? '<div class="result-note">目前顯示套用後的繁體結果；要修改原始工作副本，請切回「編輯中」。</div>' : '')
+    + rows.map(([lab, val]) =>
       `<div class="entd-row"><span class="entd-lab">${lab}</span><span class="entd-val">${val}</span></div>`).join('')
     + `<pre class="entd-body">${content ? esc(content) : '（空白）'}</pre>
-      <div class="edit-actions">
+      ${showingOutput ? '' : `<div class="edit-actions">
         <button class="minor" type="button" data-entry-action="edit" data-i="${i}">編輯</button>
         ${(entryContentChangedAt(i) || entryStatusChangedAt(i)) ? `<button class="minor danger" type="button" data-entry-action="restore" data-i="${i}">還原此條目</button>` : ''}
-      </div>`;
+      </div>`}`;
 }
 
 function renderEntries() {
-  const es = entriesOf();
+  const es = displayedEntriesOf();
+  const showingOutput = S.viewMode === 'output' && !!S.out;
   $('#enttools').classList.toggle('hidden', !es.length);
   if (!es.length) { $('#entries').innerHTML = '<div class="ent"><span class="nm">這個檔案沒有世界書條目。</span></div>'; return; }
-  const currentIssues = validate(S.card, kindOf).issues;
+  const currentIssues = validate(displayedCard(), kindOf).issues;
   const visible = es.map((e, i) => ({ e, i })).filter(({ e, i }) => {
     const f = S.filters;
     const enabled = entryEnabledAt(i, e);
@@ -2081,14 +2160,14 @@ function renderEntries() {
         ${issueCount ? `<span class="mini-badge hot">問題 ${issueCount}</span>` : ''}
         ${changed ? '<span class="mini-badge changed">已修改</span>' : ''}
       </span>
-      <span class="seg" role="group">
+      ${showingOutput ? '' : `<span class="seg" role="group">
         <button data-i="${i}" data-k="data"   aria-pressed="${S.kinds[i] === 'data'}">資料</button>
         <button data-i="${i}" data-k="prompt" aria-pressed="${S.kinds[i] !== 'data'}">提示詞</button>
-      </span>
-      <label class="switch" title="停用條目仍會接受校對與轉換">
+      </span>`}
+      ${showingOutput ? `<span class="mini-badge">${enabled ? '啟用' : '停用'}</span>` : `<label class="switch" title="停用條目仍會接受校對與轉換">
         <input type="checkbox" data-enabled="${i}" ${enabled ? 'checked' : ''} aria-label="${esc(entryLabel(e))}啟用狀態">
         <span class="switch-track" aria-hidden="true"></span><span>${enabled ? '啟用' : '停用'}</span>
-      </label>
+      </label>`}
       <span class="why">${esc(why)}</span></div>
       <div class="entd" id="entd-${i}" ${open ? '' : 'hidden'}>${open ? entryDetail(e, i) : ''}</div>
     </div>`;
@@ -2125,8 +2204,11 @@ function autoGrowTextarea(textarea) {
 }
 
 function invalidateOutput() {
-  S.out = null; S.lastRun = null; S.report = '';
+  S.out = null; S.lastRun = null; S.report = ''; S.viewMode = 'work';
   $('#outsec').classList.add('hidden');
+  $('#runState').textContent = '內容或設定已有變動，請重新套用轉換。';
+  $('#runState').classList.remove('done');
+  updateViewSwitch();
 }
 
 function saveEntry(i, form) {
@@ -2188,6 +2270,12 @@ function bindEntryTools() {
     renderEntries();
   });
   $('#restoreAll').addEventListener('click', restoreAllEntries);
+  $('#viewSwitch').querySelectorAll('button[data-view]').forEach(button => button.addEventListener('click', () => {
+    if (button.dataset.view === 'output' && !S.out) return;
+    S.viewMode = button.dataset.view;
+    S.editing = null;
+    updateViewSwitch(); renderEntries(); renderWorkbenchStatus();
+  }));
   $('#entrySearch').addEventListener('input', e => { S.filters.search = e.target.value; renderEntries(); });
   $('#entryFilters').querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
     const type = button.dataset.filter, value = button.dataset.value;
@@ -2198,6 +2286,14 @@ function bindEntryTools() {
     else S.filters[type] = !S.filters[type];
     updateFilterButtons(); renderEntries();
   }));
+}
+
+function updateViewSwitch() {
+  $('#viewSwitch').querySelectorAll('button[data-view]').forEach(button => {
+    const output = button.dataset.view === 'output';
+    button.disabled = output && !S.out;
+    button.setAttribute('aria-pressed', String(S.viewMode === button.dataset.view));
+  });
 }
 
 function updateFilterButtons() {
@@ -2216,6 +2312,7 @@ function renderWorkbenchStatus() {
   const toggled = es.filter((_, i) => entryStatusChangedAt(i)).length;
   const unresolved = unresolvedAmbiguities().length;
   $('#workStatus').innerHTML = [
+    `<b>${S.viewMode === 'output' && S.out ? '轉換結果' : '編輯中'}</b>`,
     `已修改 <b>${modified}</b> 個條目`,
     `已切換 <b>${toggled}</b> 個條目`,
     `尚有 <b>${unresolved}</b> 個疑義詞`,
@@ -2260,11 +2357,14 @@ function renderAmbiguities() {
   if (!list.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
   box.classList.remove('hidden');
   const unresolved = unresolvedAmbiguities().length;
-  box.innerHTML = `<div class="confirm-head"><b>需要再次確認</b><span class="mini-badge ${unresolved ? 'hot' : ''}">${unresolved ? `尚有 ${unresolved} 處` : '全部已處理'}</span></div>`
+  box.innerHTML = `<summary class="confirm-head"><b>需要再次確認</b><span class="mini-badge ${unresolved ? 'hot' : ''}">${unresolved ? `尚有 ${unresolved} 處` : '全部已處理'}</span></summary><div class="confirm-list">`
     + list.map(x => {
       const d = S.decisions.get(x.id);
       const label = entryLabel(entriesOf()[x.entryIndex] || {});
-      return `<div class="confirm-item" data-occurrence="${esc(x.id)}">
+      const decisionText = d ? (d.action === 'keep' ? '保留原詞' : d.value) : '待確認';
+      return `<details class="confirm-item" data-occurrence="${esc(x.id)}">
+        <summary><span>${esc(label)}・<span class="term">${esc(x.original)}</span></span><span>${esc(decisionText)}</span></summary>
+        <div class="confirm-item-body">
         <div class="confirm-meta">${esc(label)}・${x.field === 'content' ? '正文' : '名稱'}・${esc(x.description)}</div>
         <div class="confirm-context">${esc(x.before)}<mark>${esc(x.original)}</mark>${esc(x.after)}</div>
         <div class="confirm-meta" style="margin-top:6px">原文：<b>${esc(x.original)}</b>　自動繁化可能結果：<b>${esc(x.converted)}</b></div>
@@ -2275,8 +2375,9 @@ function renderAmbiguities() {
           <button type="button" data-amb-action="copy-ai" data-id="${esc(x.id)}">複製 AI 判斷內容</button>
         </div>
         <div class="ai-note">AI 輔助目前不會連線；只複製這一筆局部語境與候選詞，由你貼到慣用的 AI。結果不會自動改字。</div>
-      </div>`;
-    }).join('');
+        </div>
+      </details>`;
+    }).join('') + '</div>';
   box.querySelectorAll('[data-amb-action]').forEach(button => button.addEventListener('click', async () => {
     const x = S.ambiguities.find(item => item.id === button.dataset.id);
     if (!x) return;
@@ -2517,7 +2618,9 @@ async function run() {
   const unresolved = S.card ? unresolvedAmbiguities().length : 0;
   if (unresolved && !confirm(`仍有 ${unresolved} 處疑義詞尚未處理。可以繼續套用與匯出，但這些位置只會做安全字形轉換，不會套用語意式替換。\n\n確定繼續嗎？`)) return;
   const btn = $('#run');
-  btn.disabled = true; btn.textContent = '處理中';
+  btn.disabled = true; btn.textContent = '處理中…';
+  $('#runState').textContent = '正在套用修正與繁簡轉換…';
+  $('#runState').classList.remove('done');
   const log = $('#log'); log.innerHTML = ''; log.classList.remove('hidden');
   const say = (t, sub) => {
     log.insertAdjacentHTML('beforeend', `<div>${esc(t)}${sub ? `<br><span class="mono">${esc(sub)}</span>` : ''}</div>`);
@@ -2588,6 +2691,7 @@ async function run() {
 
     S.out = doc;
     S.lastRun = { changedCount, ambiguityDecisions: S.decisions.size, unresolved };
+    if (!isRegex && !isPreset) S.viewMode = 'output';
     const after = isRegex ? validateRegexFile(doc).issues
                 : isPreset ? validatePreset(doc).issues
                 : validate(doc, kindOf).issues;
@@ -2596,17 +2700,24 @@ async function run() {
 
     S.report = buildReport(after, r1.done, dir);
     $('#outsec').classList.remove('hidden');
+    $('#runState').textContent = `轉換完成：${changedCount} 處文字有變動${unresolved ? `，仍有 ${unresolved} 處疑義詞採安全保留` : ''}。`;
+    $('#runState').classList.add('done');
+    updateViewSwitch();
     renderReportAfter(after);
     if (isRegex) renderMetaRegex();
     else if (isPreset) renderMetaPreset();
     else { renderMeta(); renderEntries(); renderAmbiguities(); renderWorkbenchStatus(); }
     renderApplySummary();
     renderAudit();
+    if (left) $('#reportFold').open = true;
+    (S.card ? $('#entsec') : $('#outsec')).scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     say('發生錯誤：' + e.message);
+    $('#runState').textContent = '轉換失敗：' + e.message;
+    $('#convertOptions').open = true;
     if (/OpenCC/.test(e.message)) say('內建詞庫載入失敗（檔案可能不完整）。可改用「不轉換，只套用修正」。');
   } finally {
-    btn.disabled = false; btn.textContent = '套用';
+    btn.disabled = false; btn.textContent = '套用轉換';
   }
 }
 
@@ -2714,6 +2825,15 @@ function bindExports() {
   $('#doRegex').addEventListener('change', () => { invalidateOutput(); renderApplySummary(); });
   $('#reset').addEventListener('click', () => { S.out = null; $('#file').value = ''; $('#file').click(); });
 }
+
+// 提供極小的唯讀測試介面，讓回歸測試能驗證工作副本與轉換結果彼此獨立。
+globalThis.STProofreadingUI = Object.freeze({
+  load,
+  run,
+  getWorkingEntries: () => entriesOf(),
+  getDisplayedEntries: () => displayedEntriesOf(),
+  getViewMode: () => S.viewMode,
+});
 
 bindDrop(); bindExports(); bindEntryTools();
 </script>
