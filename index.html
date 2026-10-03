@@ -1813,7 +1813,7 @@ let S = {
   card: null, originalCard: null, originalSource: null, out: null, report: '',
   kinds: [], open: new Set(), statusFields: [], decisions: new Map(), ambiguities: [],
   editing: null, filters: { search: '', status: 'all', kind: 'all', confirm: false, modified: false },
-  previewConvert: null, lastRun: null, viewMode: 'work',
+  previewConvert: null, lastRun: null, viewMode: 'work', outputSnapshot: null,
 };
 
 /* ---------- OpenCC ---------- */
@@ -1859,7 +1859,7 @@ async function load(file) {
     const buf = await file.arrayBuffer();
     S.srcBuf = buf;
     S.wb = null; S.uids = null; S.preset = null; S.rx = null; S.open = new Set();
-    S.decisions = new Map(); S.ambiguities = []; S.editing = null; S.previewConvert = null; S.lastRun = null; S.viewMode = 'work';
+    S.decisions = new Map(); S.ambiguities = []; S.editing = null; S.previewConvert = null; S.lastRun = null; S.viewMode = 'work'; S.outputSnapshot = null;
     S.filters = { search: '', status: 'all', kind: 'all', confirm: false, modified: false };
     $('#entrySearch').value = '';
     $('#reportFold').open = false;
@@ -1925,11 +1925,13 @@ async function load(file) {
   }
 }
 
-const viewCard = () => S.out || S.card;
 const entriesOf = (card = S.card) => (card?.data || card || {}).character_book?.entries || [];
 const displayedCard = () => S.viewMode === 'output' && S.out ? S.out : S.card;
+const viewCard = () => displayedCard();
 const displayedEntriesOf = () => entriesOf(displayedCard());
 const originalEntriesOf = () => entriesOf(S.originalCard);
+const outputSnapshotEntriesOf = () => entriesOf(S.outputSnapshot);
+const isOutputView = () => S.viewMode === 'output' && !!S.out;
 function initKinds() { S.kinds = entriesOf().map(e => classifyEntry(e).kind); }
 const kindOf = (e, i) => S.kinds[i] || 'prompt';
 
@@ -1940,7 +1942,7 @@ function entryEnabledAt(i, entry = entriesOf()[i]) {
 /* ---------- 概要 ---------- */
 function renderMeta() {
   const d = viewCard().data || viewCard();
-  const es = entriesOf();
+  const es = displayedEntriesOf();
   const nData = S.kinds.filter(k => k === 'data').length;
   if (S.kind === 'worldbook') {
     const on = es.filter((e, i) => entryEnabledAt(i, e)).length;
@@ -2018,6 +2020,10 @@ function writeKeywordEditorValue(e, field, value) {
 
 function entryStatusChangedAt(i) {
   const original = originalEntriesOf()[i], current = entriesOf()[i];
+  return entryStatusChangedBetween(original, current, i);
+}
+
+function entryStatusChangedBetween(original, current, i) {
   if (!original || !current) return false;
   const field = S.statusFields[i] || detectEntryEnabledField(original, S.kind);
   return readEntryEnabled(original, field) !== readEntryEnabled(current, field);
@@ -2025,10 +2031,30 @@ function entryStatusChangedAt(i) {
 
 function entryContentChangedAt(i) {
   const original = originalEntriesOf()[i], current = entriesOf()[i];
+  return entryContentChangedBetween(original, current);
+}
+
+function entryContentChangedBetween(original, current) {
   if (!original || !current) return false;
   const a = cloneData(original), b = cloneData(current);
   delete a.enabled; delete a.disable; delete b.enabled; delete b.disable;
   return JSON.stringify(a) !== JSON.stringify(b);
+}
+
+function outputEntryStatusChangedAt(i) {
+  return entryStatusChangedBetween(outputSnapshotEntriesOf()[i], entriesOf(S.out)[i], i);
+}
+
+function outputEntryContentChangedAt(i) {
+  return entryContentChangedBetween(outputSnapshotEntriesOf()[i], entriesOf(S.out)[i]);
+}
+
+function displayedEntryStatusChangedAt(i) {
+  return isOutputView() ? outputEntryStatusChangedAt(i) : entryStatusChangedAt(i);
+}
+
+function displayedEntryContentChangedAt(i) {
+  return isOutputView() ? outputEntryContentChangedAt(i) : entryContentChangedAt(i);
 }
 
 function unresolvedAmbiguities() {
@@ -2082,8 +2108,8 @@ function entryEditor(e, i) {
 
 /** 展開後顯示的條目細節。只有展開中的條目才會產生這段 HTML。 */
 function entryDetail(e, i) {
-  const showingOutput = S.viewMode === 'output' && !!S.out;
-  if (!showingOutput && S.editing === i) return entryEditor(e, i);
+  const showingOutput = isOutputView();
+  if (S.editing === i) return entryEditor(e, i);
   const chips = a => a.length
     ? a.map(k => `<code class="chip">${esc(k)}</code>`).join('')
     : '<span class="none">（無）</span>';
@@ -2109,19 +2135,19 @@ function entryDetail(e, i) {
     ['內容', `<span class="entd-meta">${content.length} 字元・${content ? content.split('\n').length : 0} 行</span>`],
   ].filter(Boolean);
 
-  return (showingOutput ? '<div class="result-note">目前顯示套用後的繁體結果；要修改原始工作副本，請切回「編輯中」。</div>' : '')
+  return (showingOutput ? '<div class="result-note">目前顯示套用後的繁體結果；可直接編輯並切換啟用狀態，匯出時會保留這些調整。</div>' : '')
     + rows.map(([lab, val]) =>
       `<div class="entd-row"><span class="entd-lab">${lab}</span><span class="entd-val">${val}</span></div>`).join('')
     + `<pre class="entd-body">${content ? esc(content) : '（空白）'}</pre>
-      ${showingOutput ? '' : `<div class="edit-actions">
+      <div class="edit-actions">
         <button class="minor" type="button" data-entry-action="edit" data-i="${i}">編輯</button>
-        ${(entryContentChangedAt(i) || entryStatusChangedAt(i)) ? `<button class="minor danger" type="button" data-entry-action="restore" data-i="${i}">還原此條目</button>` : ''}
-      </div>`}`;
+        ${(displayedEntryContentChangedAt(i) || displayedEntryStatusChangedAt(i)) ? `<button class="minor danger" type="button" data-entry-action="restore" data-i="${i}">還原此條目</button>` : ''}
+      </div>`;
 }
 
 function renderEntries() {
   const es = displayedEntriesOf();
-  const showingOutput = S.viewMode === 'output' && !!S.out;
+  const showingOutput = isOutputView();
   $('#enttools').classList.toggle('hidden', !es.length);
   if (!es.length) { $('#entries').innerHTML = '<div class="ent"><span class="nm">這個檔案沒有世界書條目。</span></div>'; return; }
   const currentIssues = validate(displayedCard(), kindOf).issues;
@@ -2135,7 +2161,7 @@ function renderEntries() {
     if (f.status === 'disabled' && enabled) return false;
     if (f.kind !== 'all' && S.kinds[i] !== f.kind) return false;
     if (f.confirm && !hasConfirm) return false;
-    if (f.modified && !entryContentChangedAt(i) && !entryStatusChangedAt(i)) return false;
+    if (f.modified && !displayedEntryContentChangedAt(i) && !displayedEntryStatusChangedAt(i)) return false;
     return true;
   });
   if (!visible.length) {
@@ -2148,7 +2174,7 @@ function renderEntries() {
     const enabled = entryEnabledAt(i, e);
     const ambCount = S.ambiguities.filter(x => x.entryIndex === i).length;
     const issueCount = currentIssues.filter(x => `${x.title}\n${x.detail}`.includes(entryLabel(e))).length;
-    const changed = entryContentChangedAt(i) || entryStatusChangedAt(i);
+    const changed = displayedEntryContentChangedAt(i) || displayedEntryStatusChangedAt(i);
     return `<div class="ent-wrap ${enabled ? '' : 'is-off'}"><div class="ent">
       <button type="button" class="tw" data-x="${i}" aria-expanded="${open}" aria-controls="entd-${i}">
         <span class="caret" aria-hidden="true">▶</span>
@@ -2164,10 +2190,10 @@ function renderEntries() {
         <button data-i="${i}" data-k="data"   aria-pressed="${S.kinds[i] === 'data'}">資料</button>
         <button data-i="${i}" data-k="prompt" aria-pressed="${S.kinds[i] !== 'data'}">提示詞</button>
       </span>`}
-      ${showingOutput ? `<span class="mini-badge">${enabled ? '啟用' : '停用'}</span>` : `<label class="switch" title="停用條目仍會接受校對與轉換">
+      <label class="switch" title="${showingOutput ? '這項調整會直接寫入匯出結果' : '停用條目仍會接受校對與轉換'}">
         <input type="checkbox" data-enabled="${i}" ${enabled ? 'checked' : ''} aria-label="${esc(entryLabel(e))}啟用狀態">
         <span class="switch-track" aria-hidden="true"></span><span>${enabled ? '啟用' : '停用'}</span>
-      </label>`}
+      </label>
       <span class="why">${esc(why)}</span></div>
       <div class="entd" id="entd-${i}" ${open ? '' : 'hidden'}>${open ? entryDetail(e, i) : ''}</div>
     </div>`;
@@ -2177,9 +2203,7 @@ function renderEntries() {
     invalidateOutput(); renderEntries(); renderReport(); renderMeta(); renderFixes(); renderApplySummary();
   }));
   $('#entries').querySelectorAll('input[data-enabled]').forEach(input => input.addEventListener('change', () => {
-    const i = +input.dataset.enabled, e = entriesOf()[i];
-    writeEntryEnabled(e, S.statusFields[i], input.checked);
-    invalidateOutput(); renderMeta(); renderEntries(); renderWorkbenchStatus(); renderApplySummary();
+    setDisplayedEntryEnabled(+input.dataset.enabled, input.checked);
   }));
   $('#entries').querySelectorAll('button.tw').forEach(b => b.addEventListener('click', () => {
     const i = +b.dataset.x;
@@ -2204,7 +2228,7 @@ function autoGrowTextarea(textarea) {
 }
 
 function invalidateOutput() {
-  S.out = null; S.lastRun = null; S.report = ''; S.viewMode = 'work';
+  S.out = null; S.outputSnapshot = null; S.lastRun = null; S.report = ''; S.viewMode = 'work';
   $('#outsec').classList.add('hidden');
   $('#runState').textContent = '內容或設定已有變動，請重新套用轉換。';
   $('#runState').classList.remove('done');
@@ -2212,24 +2236,63 @@ function invalidateOutput() {
 }
 
 function saveEntry(i, form) {
-  const e = entriesOf()[i];
+  commitDisplayedEntry(i, {
+    name: form.elements.name.value,
+    content: form.elements.content.value,
+    primary: form.elements.primary?.value,
+    secondary: form.elements.secondary?.value,
+  });
+}
+
+function commitDisplayedEntry(i, values) {
+  const outputMode = isOutputView();
+  const e = displayedEntriesOf()[i];
   if (!e) return;
   const nf = entryNameField(e), k1 = keyField(e, false), k2 = keyField(e, true);
   const previousName = e[nf], previousContent = e.content;
-  e[nf] = form.elements.name.value;
+  if (values.name !== undefined) e[nf] = values.name;
   // textarea 會把 CRLF 正規化為 LF；若使用者沒有實際更動，保留來源的原始換行位元。
   const normalizedOriginal = String(e.content ?? '').replace(/\r\n?/g, '\n');
-  if (form.elements.content.value !== normalizedOriginal) e.content = form.elements.content.value;
-  if (k1 && form.elements.primary && form.elements.primary.value !== keywordEditorValue(e, k1).replace(/\r\n?/g, '\n'))
-    writeKeywordEditorValue(e, k1, form.elements.primary.value);
-  if (k2 && form.elements.secondary && form.elements.secondary.value !== keywordEditorValue(e, k2).replace(/\r\n?/g, '\n'))
-    writeKeywordEditorValue(e, k2, form.elements.secondary.value);
-  S.kinds[i] = classifyEntry(e).kind;
+  if (values.content !== undefined && values.content !== normalizedOriginal) e.content = values.content;
+  if (k1 && values.primary !== undefined && values.primary !== keywordEditorValue(e, k1).replace(/\r\n?/g, '\n'))
+    writeKeywordEditorValue(e, k1, values.primary);
+  if (k2 && values.secondary !== undefined && values.secondary !== keywordEditorValue(e, k2).replace(/\r\n?/g, '\n'))
+    writeKeywordEditorValue(e, k2, values.secondary);
   S.editing = null;
+  if (outputMode) {
+    refreshOutputAfterEdit();
+    return;
+  }
+  S.kinds[i] = classifyEntry(e).kind;
   if (e[nf] !== previousName || e.content !== previousContent) clearEntryDecisions(i);
   invalidateOutput(); refreshAmbiguities(i);
   renderMeta(); renderEntries(); renderAmbiguities(); renderWorkbenchStatus();
   renderReport(); renderFixes(); renderAudit(); renderApplySummary();
+}
+
+function setDisplayedEntryEnabled(i, enabled) {
+  const outputMode = isOutputView();
+  const e = displayedEntriesOf()[i];
+  if (!e) return;
+  writeEntryEnabled(e, S.statusFields[i], enabled);
+  if (outputMode) refreshOutputAfterEdit();
+  else {
+    invalidateOutput(); renderMeta(); renderEntries(); renderWorkbenchStatus(); renderApplySummary();
+  }
+}
+
+function refreshOutputAfterEdit() {
+  if (!S.out) return;
+  const after = validate(S.out, kindOf).issues;
+  renderReportAfter(after);
+  renderMeta(); renderEntries(); renderWorkbenchStatus(); renderApplySummary(); renderAudit();
+  const changed = entriesOf(S.out).filter((_, i) => outputEntryContentChangedAt(i) || outputEntryStatusChangedAt(i)).length;
+  $('#runState').textContent = `轉換完成；已另外手動調整 ${changed} 個結果條目。`;
+  $('#runState').classList.add('done');
+  if (S.lastRun) {
+    const dir = DIRS.find(d => d.id === S.lastRun.dirId) || DIRS[0];
+    S.report = buildReport(after, S.lastRun.done || [], dir);
+  }
 }
 
 function clearEntryDecisions(i) {
@@ -2237,6 +2300,14 @@ function clearEntryDecisions(i) {
 }
 
 function restoreEntry(i) {
+  if (isOutputView()) {
+    const converted = outputSnapshotEntriesOf()[i];
+    if (!converted) return;
+    entriesOf(S.out).splice(i, 1, cloneData(converted));
+    S.editing = null;
+    refreshOutputAfterEdit();
+    return;
+  }
   const original = originalEntriesOf()[i];
   if (!original) return;
   entriesOf().splice(i, 1, cloneData(original));
@@ -2247,6 +2318,13 @@ function restoreEntry(i) {
 }
 
 function restoreAllEntries() {
+  if (isOutputView()) {
+    if (!confirm('要還原轉換結果中的全部手動文字與啟用狀態修改嗎？轉換本身會保留。')) return;
+    S.out = cloneData(S.outputSnapshot);
+    S.editing = null;
+    refreshOutputAfterEdit();
+    return;
+  }
   if (!confirm('要還原全部條目文字、關鍵詞、啟用狀態與疑義詞決定嗎？')) return;
   if (S.kind === 'worldbook') {
     S.wb = cloneData(S.originalSource);
@@ -2274,7 +2352,7 @@ function bindEntryTools() {
     if (button.dataset.view === 'output' && !S.out) return;
     S.viewMode = button.dataset.view;
     S.editing = null;
-    updateViewSwitch(); renderEntries(); renderWorkbenchStatus();
+    updateViewSwitch(); renderMeta(); renderEntries(); renderWorkbenchStatus(); renderApplySummary();
   }));
   $('#entrySearch').addEventListener('input', e => { S.filters.search = e.target.value; renderEntries(); });
   $('#entryFilters').querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
@@ -2307,14 +2385,15 @@ function updateFilterButtons() {
 }
 
 function renderWorkbenchStatus() {
-  const es = entriesOf();
-  const modified = es.filter((_, i) => entryContentChangedAt(i)).length;
-  const toggled = es.filter((_, i) => entryStatusChangedAt(i)).length;
+  const outputMode = isOutputView();
+  const es = displayedEntriesOf();
+  const modified = es.filter((_, i) => displayedEntryContentChangedAt(i)).length;
+  const toggled = es.filter((_, i) => displayedEntryStatusChangedAt(i)).length;
   const unresolved = unresolvedAmbiguities().length;
   $('#workStatus').innerHTML = [
-    `<b>${S.viewMode === 'output' && S.out ? '轉換結果' : '編輯中'}</b>`,
-    `已修改 <b>${modified}</b> 個條目`,
-    `已切換 <b>${toggled}</b> 個條目`,
+    `<b>${outputMode ? '轉換結果（可編輯）' : '編輯中'}</b>`,
+    `${outputMode ? '結果已修改' : '已修改'} <b>${modified}</b> 個條目`,
+    `${outputMode ? '結果已切換' : '已切換'} <b>${toggled}</b> 個條目`,
     `尚有 <b>${unresolved}</b> 個疑義詞`,
   ].map(x => `<span>${x}</span>`).join('');
   const badge = $('#confirmBadge');
@@ -2425,6 +2504,28 @@ function manualChangeRows() {
   return rows;
 }
 
+function outputManualChangeRows() {
+  if (!S.out || !S.outputSnapshot) return [];
+  const rows = [];
+  entriesOf(S.out).forEach((entry, i) => {
+    const converted = outputSnapshotEntriesOf()[i];
+    if (!converted) return;
+    const nf = entryNameField(entry), cnf = entryNameField(converted);
+    if (entry[nf] !== converted[cnf]) rows.push(`「${entryLabel(converted)}」轉換結果名稱：${shortDiffText(converted[cnf])} → ${shortDiffText(entry[nf])}`);
+    if (entry.content !== converted.content) rows.push(`「${entryLabel(entry)}」轉換結果正文：${shortDiffText(converted.content)} → ${shortDiffText(entry.content)}`);
+    for (const secondary of [false, true]) {
+      const k = keyField(entry, secondary), ck = keyField(converted, secondary);
+      if (k && ck && JSON.stringify(entry[k]) !== JSON.stringify(converted[ck]))
+        rows.push(`「${entryLabel(entry)}」轉換結果${secondary ? '次要' : '主'}關鍵詞已修改`);
+    }
+    if (outputEntryStatusChangedAt(i)) {
+      const field = S.statusFields[i] || detectEntryEnabledField(converted, S.kind);
+      rows.push(`「${entryLabel(entry)}」轉換結果狀態：${readEntryEnabled(converted, field) ? '啟用' : '停用'} → ${readEntryEnabled(entry, field) ? '啟用' : '停用'}`);
+    }
+  });
+  return rows;
+}
+
 function renderApplySummary() {
   const box = $('#applySummary');
   if (!S.card) {
@@ -2437,12 +2538,15 @@ function renderApplySummary() {
   const decisions = S.decisions.size;
   const ai = [...S.decisions.values()].filter(x => x.source === 'ai').length;
   const unresolved = unresolvedAmbiguities().length;
-  const rows = manualChangeRows();
+  const outputContent = S.out ? entriesOf(S.out).filter((_, i) => outputEntryContentChangedAt(i)).length : 0;
+  const outputStatus = S.out ? entriesOf(S.out).filter((_, i) => outputEntryStatusChangedAt(i)).length : 0;
+  const rows = manualChangeRows().concat(outputManualChangeRows());
   box.innerHTML = `<div class="tt">最終修改摘要</div>
     <div class="summary-grid">
       <span>條目內容修改 <b>${content}</b></span><span>啟用狀態修改 <b>${status}</b></span>
       <span>疑義詞人工決定 <b>${decisions - ai}</b></span><span>AI 建議採用 <b>${ai}</b></span>
       <span>自動繁簡轉換 <b>${S.lastRun?.changedCount ?? '待套用'}</b></span><span>尚未確認 <b>${unresolved}</b></span>
+      ${S.out ? `<span>轉換結果手動修改 <b>${outputContent}</b></span><span>結果狀態調整 <b>${outputStatus}</b></span>` : ''}
     </div>
     ${rows.length ? `<div class="summary-diff">${rows.slice(0, 20).map(row => `<div>${esc(row)}</div>`).join('')}${rows.length > 20 ? `<div>另有 ${rows.length - 20} 項…</div>` : ''}</div>` : ''}`;
 }
@@ -2690,7 +2794,8 @@ async function run() {
     }
 
     S.out = doc;
-    S.lastRun = { changedCount, ambiguityDecisions: S.decisions.size, unresolved };
+    S.outputSnapshot = cloneData(doc);
+    S.lastRun = { changedCount, ambiguityDecisions: S.decisions.size, unresolved, done: [...r1.done], dirId: dir.id };
     if (!isRegex && !isPreset) S.viewMode = 'output';
     const after = isRegex ? validateRegexFile(doc).issues
                 : isPreset ? validatePreset(doc).issues
@@ -2747,6 +2852,8 @@ function buildReport(issues, done, dir) {
   if (S.card) {
     const changedEntries = entriesOf().filter((_, i) => entryContentChangedAt(i)).length;
     const toggledEntries = entriesOf().filter((_, i) => entryStatusChangedAt(i)).length;
+    const outputChangedEntries = S.out ? entriesOf(S.out).filter((_, i) => outputEntryContentChangedAt(i)).length : 0;
+    const outputToggledEntries = S.out ? entriesOf(S.out).filter((_, i) => outputEntryStatusChangedAt(i)).length : 0;
     const aiUsed = [...S.decisions.values()].filter(x => x.source === 'ai').length;
     L.push('── 最終修改摘要 ──');
     L.push(`  條目內容修改 ${changedEntries}`);
@@ -2754,8 +2861,10 @@ function buildReport(issues, done, dir) {
     L.push(`  疑義詞人工決定 ${S.decisions.size - aiUsed}`);
     L.push(`  AI 建議採用 ${aiUsed}`);
     L.push(`  自動繁簡轉換 ${S.lastRun?.changedCount ?? 0}`);
+    L.push(`  轉換結果手動修改 ${outputChangedEntries}`);
+    L.push(`  結果狀態調整 ${outputToggledEntries}`);
     L.push(`  尚未確認 ${unresolvedAmbiguities().length}`);
-    manualChangeRows().forEach(row => L.push('  ・' + row));
+    manualChangeRows().concat(outputManualChangeRows()).forEach(row => L.push('  ・' + row));
     L.push('');
   }
   L.push('── 已套用的修正 ──');
@@ -2826,13 +2935,15 @@ function bindExports() {
   $('#reset').addEventListener('click', () => { S.out = null; $('#file').value = ''; $('#file').click(); });
 }
 
-// 提供極小的唯讀測試介面，讓回歸測試能驗證工作副本與轉換結果彼此獨立。
+// 提供極小的測試介面，讓回歸測試能驗證工作副本、轉換結果與結果編輯彼此獨立。
 globalThis.STProofreadingUI = Object.freeze({
   load,
   run,
   getWorkingEntries: () => entriesOf(),
   getDisplayedEntries: () => displayedEntriesOf(),
   getViewMode: () => S.viewMode,
+  editDisplayedEntry: (i, values) => commitDisplayedEntry(i, values),
+  setDisplayedEntryEnabled,
 });
 
 bindDrop(); bindExports(); bindEntryTools();
