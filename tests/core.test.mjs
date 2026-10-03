@@ -94,7 +94,7 @@ test('UI bridge initializes and loads a character-card fixture without a runtime
   await assert.doesNotReject(() => context.load({ name: 'regex.json', async arrayBuffer() { return regexBytes.buffer; } }));
 });
 
-test('after conversion the workbench displays the converted traditional entry content', async () => {
+test('converted entries stay editable without mutating the pre-conversion working copy', async () => {
   const context = makeContext();
   const dom = installDomStub(context);
   vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
@@ -108,6 +108,13 @@ test('after conversion the workbench displays the converted traditional entry co
   assert.equal(context.STProofreadingUI.getViewMode(), 'output');
   assert.match(context.STProofreadingUI.getDisplayedEntries()[0].content, /角色皮膚/);
   assert.match(context.STProofreadingUI.getWorkingEntries()[0].content, /角色皮肤/);
+
+  context.STProofreadingUI.editDisplayedEntry(0, { content: '  我手動修改繁體結果  \n{{user}} 😀' });
+  context.STProofreadingUI.setDisplayedEntryEnabled(0, false);
+  assert.equal(context.STProofreadingUI.getDisplayedEntries()[0].content, '  我手動修改繁體結果  \n{{user}} 😀');
+  assert.equal(context.STProofreadingUI.getDisplayedEntries()[0].enabled, false);
+  assert.match(context.STProofreadingUI.getWorkingEntries()[0].content, /角色皮肤/);
+  assert.equal(context.STProofreadingUI.getWorkingEntries()[0].enabled, true);
 });
 
 test('standalone worldbook keeps disable semantics and every unknown field', () => {
