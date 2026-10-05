@@ -167,6 +167,22 @@
   .view-switch button{min-height:44px;padding:7px 12px;border:0;background:#fff;color:var(--soft);font:inherit;font-size:12px;cursor:pointer}
   .view-switch button[aria-pressed=true]{background:var(--pass);color:#fff}
   .view-switch button:disabled{color:#abb2ae;cursor:not-allowed}
+  .work-actions{display:flex;gap:7px;align-items:stretch;flex:none}
+  .edit-mode-toggle{
+    min-height:44px;padding:7px 13px;border:1px solid #cbb3ba;border-radius:12px;
+    background:var(--rose);color:#765762;font:inherit;font-size:12px;font-weight:600;cursor:pointer
+  }
+  .edit-mode-toggle[aria-pressed=true]{background:var(--pen);border-color:var(--pen);color:#fff}
+  .edit-mode-toggle:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .top-exports{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:11px;padding:10px 12px;
+    border:1px solid rgba(255,255,255,.24);border-radius:12px;background:rgba(251,250,247,.12)
+  }
+  .top-exports-copy{font-size:12px;color:#f0f4f1}
+  .top-exports-copy b{display:block;color:#fff;font-size:13px}
+  .top-export-buttons{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}
+  .top-export-buttons .act{min-height:44px;padding:8px 13px;background:var(--leaf);color:var(--ink);font-size:12px}
+  .top-export-buttons .act:hover{background:#fff}
   .work-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:8px;margin-bottom:10px;align-items:start}
   .work-search{
     width:100%;min-height:44px;padding:8px 11px;border:1px solid var(--rule);
@@ -389,8 +405,13 @@
     .convert-row select{grid-column:1/-1}
     .convert-row .act{padding:9px 10px}
     .work-topline{display:block}
-    .view-switch{margin-top:7px}
+    .work-actions{margin-top:7px}
+    .view-switch{flex:1}
     .view-switch button{flex:1}
+    .edit-mode-toggle{flex:none}
+    .top-exports{display:block}
+    .top-export-buttons{margin-top:8px;justify-content:stretch}
+    .top-export-buttons .act{flex:1 1 120px}
     .work-toolbar{grid-template-columns:1fr auto}
     .filterbar button{flex:1 1 auto}
     .preset-order{display:block}
@@ -438,6 +459,14 @@
       <button class="act" id="reset">重新載入</button>
     </div>
     <p class="convert-state" id="runState">設定好條目後即可套用；完成時工作台會直接顯示轉換結果。</p>
+    <div class="top-exports hidden" id="outsec">
+      <span class="top-exports-copy"><b>轉換結果已備妥</b>可先在下方開啟編輯模式修改，也可直接下載。</span>
+      <div class="top-export-buttons">
+        <button class="act" id="dlPng">下載 PNG</button>
+        <button class="act" id="dlJson">下載 JSON</button>
+        <button class="act" id="dlRep">下載校對報告</button>
+      </div>
+    </div>
     <details class="convert-options" id="convertOptions">
       <summary>修正選項、轉換說明與修改摘要</summary>
       <div class="convert-options-body">
@@ -463,9 +492,12 @@
     </p>
     <div class="work-topline">
       <div class="work-status" id="workStatus"></div>
-      <div class="view-switch" id="viewSwitch" aria-label="條目內容檢視">
-        <button type="button" data-view="work" aria-pressed="true">編輯中</button>
-        <button type="button" data-view="output" aria-pressed="false" disabled>轉換結果</button>
+      <div class="work-actions">
+        <div class="view-switch" id="viewSwitch" aria-label="條目內容檢視">
+          <button type="button" data-view="work" aria-pressed="true">原始內容</button>
+          <button type="button" data-view="output" aria-pressed="false" disabled>轉換結果</button>
+        </div>
+        <button type="button" class="edit-mode-toggle" id="editModeToggle" aria-pressed="false">編輯模式</button>
       </div>
     </div>
     <div class="work-toolbar" id="workToolbar">
@@ -510,16 +542,6 @@
       <summary><h2><span class="n">04</span>風險稽核</h2><span class="h2sub" id="auditsub"></span></summary>
       <div class="fold-body" id="audit"></div>
     </details>
-  </section>
-
-  <section id="outsec" class="hidden">
-    <h2><span class="n">05</span>匯出</h2>
-    <p class="h2sub">匯入前建議先備份原卡，方便對照。</p>
-    <div class="row">
-      <button class="act" id="dlPng">下載 PNG</button>
-      <button class="act" id="dlJson">下載 JSON</button>
-      <button class="act" id="dlRep">下載校對報告</button>
-    </div>
   </section>
 
 </div>
@@ -726,7 +748,7 @@ const RE_SECTION = /^\s*\[(.+)\]\s*$/;
 
 /** 判斷世界書條目是否為「程式讀取的資料條目」 */
 function classifyEntry(entry) {
-  const name = entry.comment || '';
+  const name = entry?.[entryNameField(entry)] || '';
   const content = entry.content || '';
   const lines = content.split('\n').map(s => s.trim()).filter(Boolean);
   const kv = lines.filter(l => RE_KV.test(l) && !RE_SECTION.test(l)).length;
@@ -803,6 +825,7 @@ const AMBIGUITY_RE = new RegExp(
     .map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
 
 function entryNameField(entry) {
+  for (const key of ['comment', 'memo', 'name']) if (typeof entry?.[key] === 'string' && entry[key] !== '') return key;
   for (const key of ['comment', 'memo', 'name']) if (typeof entry?.[key] === 'string') return key;
   return 'comment';
 }
@@ -952,6 +975,17 @@ function convertPrompt(text, convert) {
   return protectedConvert(text, convert, [P_URL, P_HEX, P_BRACKET, P_TAG]);
 }
 
+/** 關鍵詞在不同版本可能是陣列，也可能是逗號分隔字串；維持來源形狀與空白。 */
+function convertKeywordValue(raw, convert) {
+  if (Array.isArray(raw)) return raw.map(value => typeof value === 'string' ? convert(value) : value);
+  if (typeof raw !== 'string') return raw;
+  return raw.split(/(,)/).map(part => {
+    if (part === ',') return part;
+    const match = part.match(/^(\s*)([\s\S]*?)(\s*)$/);
+    return match ? match[1] + convert(match[2]) + match[3] : convert(part);
+  }).join('');
+}
+
 /**
  * 主轉換。opts = { convert, doRegex }
  * 回傳 { card, changed: [{where, before, after}] }
@@ -1004,13 +1038,14 @@ function convertCard(cardIn, opts) {
     (book.entries || []).forEach((e, idx) => {
       const cls = { kind: kindOf(e, idx) };
 
-      // 條目名稱
+      // 條目名稱：comment / memo / name 都可能出現，必須依來源欄位寫回
+      const nf = entryNameField(e);
       if (cls.kind === 'data') {
         // 保持／還原為簡體
-        const rev = canon('entryNames', e.comment);
-        if (rev) { note('條目名稱（還原）', e.comment, rev); e.comment = rev; }
-      } else if (e.comment) {
-        const v = convert(e.comment); note('條目名稱', e.comment, v); e.comment = v;
+        const rev = canon('entryNames', e[nf]);
+        if (rev) { note('條目名稱（還原）', e[nf], rev); e[nf] = rev; }
+      } else if (e[nf]) {
+        const v = convert(e[nf]); note('條目名稱', e[nf], v); e[nf] = v;
       }
 
       // 內容
@@ -1029,15 +1064,17 @@ function convertCard(cardIn, opts) {
         } else {
           v = convertPrompt(e.content, convert);
         }
-        note(`條目內容「${e.comment}」`, e.content, v);
+        note(`條目內容「${e[nf]}」`, e.content, v);
         e.content = v;
       }
 
       // 觸發關鍵字：要跟 AI 輸出一致 → 轉換
       for (const kf of ['keys', 'secondary_keys', 'key', 'keysecondary']) {
-        if (Array.isArray(e[kf])) e[kf] = e[kf].map(k => {
-          const v = convert(k); note(`關鍵字`, k, v); return v;
-        });
+        if (!owns(e, kf)) continue;
+        const before = cloneData(e[kf]);
+        const value = convertKeywordValue(e[kf], convert);
+        if (JSON.stringify(before) !== JSON.stringify(value)) changed.push({ where: '關鍵字', before, after: value });
+        e[kf] = value;
       }
     });
   }
@@ -1055,15 +1092,9 @@ function convertCard(cardIn, opts) {
 
   // 正則：可選
   if (opts.doRegex && data.extensions?.regex_scripts) {
-    for (const r of data.extensions.regex_scripts) {
-      if (r.scriptName) { const v = convert(r.scriptName); note('正則名稱', r.scriptName, v); r.scriptName = v; }
-      for (const f of ['findRegex', 'replaceString']) {
-        if (typeof r[f] === 'string' && r[f]) {
-          const v = protectedConvert(r[f], convert, [P_URL, P_HEX, /<script[\s\S]*?<\/script>/gi]);
-          note(`正則 ${f}`, r[f], v); r[f] = v;
-        }
-      }
-    }
+    const convertedRegex = convertRegexFile(data.extensions.regex_scripts, { convert });
+    data.extensions.regex_scripts = convertedRegex.list;
+    convertedRegex.changed.forEach(item => note(`內嵌正則｜${item.where}`, item.before, item.after));
   }
 
   return { card, changed };
@@ -1480,6 +1511,9 @@ function unwrapWorldbook(orig, pseudo, uids) {
 /* ---------- 預設 ---------- */
 const PRESET_TEXT_FIELDS = [
   'name',
+  'main_prompt', 'nsfw_prompt', 'jailbreak_prompt', 'jailbreak_system',
+  'world_info_format', 'chat_start', 'example_separator', 'chat_separator',
+  'system_prompt', 'post_history_instructions',
   'impersonation_prompt', 'new_chat_prompt', 'new_group_chat_prompt', 'new_example_chat_prompt',
   'continue_nudge_prompt', 'group_nudge_prompt', 'send_if_empty', 'assistant_prefill',
   'assistant_impersonation', 'human_sysprompt_message', 'wi_format', 'scenario_format',
@@ -1845,7 +1879,7 @@ let S = {
   srcName: '', srcBuf: null, chunks: null, hadCcv3: false, isPng: false,
   card: null, originalCard: null, originalSource: null, out: null, report: '',
   kinds: [], open: new Set(), statusFields: [], decisions: new Map(), ambiguities: [],
-  editing: null, filters: { search: '', status: 'all', kind: 'all', confirm: false, modified: false },
+  editing: null, editMode: false, filters: { search: '', status: 'all', kind: 'all', confirm: false, modified: false },
   previewConvert: null, lastRun: null, viewMode: 'work', outputSnapshot: null,
   presetOrderIndex: 0,
 };
@@ -1893,7 +1927,7 @@ async function load(file) {
     const buf = await file.arrayBuffer();
     S.srcBuf = buf;
     S.wb = null; S.uids = null; S.preset = null; S.rx = null; S.open = new Set();
-    S.decisions = new Map(); S.ambiguities = []; S.editing = null; S.previewConvert = null; S.lastRun = null; S.viewMode = 'work'; S.outputSnapshot = null; S.presetOrderIndex = 0;
+    S.decisions = new Map(); S.ambiguities = []; S.editing = null; S.editMode = false; S.previewConvert = null; S.lastRun = null; S.viewMode = 'work'; S.outputSnapshot = null; S.presetOrderIndex = 0;
     S.filters = { search: '', status: 'all', kind: 'all', confirm: false, modified: false };
     $('#entrySearch').value = '';
     $('#reportFold').open = false;
@@ -1936,6 +1970,7 @@ async function load(file) {
     })
                 .catch(() => {});
     $('#outsec').classList.add('hidden');
+    $('#dlPng').classList.toggle('hidden', !S.isPng);
     $('#log').classList.add('hidden');
     $('#runState').textContent = '設定好條目後即可套用；完成時工作台會直接顯示轉換結果。';
     $('#runState').classList.remove('done');
@@ -1950,6 +1985,7 @@ async function load(file) {
     }
     renderAudit();
     updateViewSwitch();
+    updateEditMode();
     $('#entsec').classList.remove('hidden');
     const embeddedRegexCount = S.kind === 'preset' ? presetRegexScripts(S.preset).length
       : S.kind === 'card' ? ((S.card?.data || S.card)?.extensions?.regex_scripts || []).length : 0;
@@ -2102,10 +2138,10 @@ function renderCurrentMeta() {
 
 function configureWorkbench() {
   const intros = {
-    card: '<b>資料</b>＝腳本讀取，名稱與鍵名必須維持簡體。<b>提示詞</b>＝AI 讀取，全部轉成繁體。可調整分類、狀態與內容；停用條目仍會轉換。',
-    worldbook: '獨立世界書的每個條目都會顯示並接受轉換；可編輯名稱、正文、關鍵詞與啟用狀態，未知欄位及原始順序會保留。',
-    preset: '依 Prompt Manager 的實際順序顯示全部提示詞；可編輯內容與啟用狀態。內嵌 Regex Scripts 會列在同一工作台下方。',
-    regex: '每條正則都可展開檢查及編輯。繁簡轉換會處理名稱、搜尋式、替換內容與 trimStrings，同時保留其他設定。',
+    card: '<b>資料</b>＝腳本讀取，名稱與鍵名必須維持簡體。<b>提示詞</b>＝AI 讀取，內容會轉成繁體。按「編輯模式」後可調整分類、狀態與內容；停用條目仍會轉換。',
+    worldbook: '獨立世界書的每個條目都會顯示並接受轉換。原始與轉換結果都能透過「編輯模式」修改名稱、正文、關鍵詞與啟用狀態。',
+    preset: '依 Prompt Manager 的實際順序顯示全部提示詞。原始與轉換結果都可按「編輯模式」修改；內嵌 Regex Scripts 會列在同一工作台下方。',
+    regex: '每條正則都可展開檢查；按「編輯模式」後可修改名稱、搜尋式、替換內容與 trimStrings，原始與轉換結果都支援。',
   };
   $('#workIntro').innerHTML = intros[S.kind] || intros.card;
   $('#entrySearch').placeholder = S.kind === 'preset' ? '搜尋 Prompt 名稱、identifier、正文或正則'
@@ -2248,7 +2284,7 @@ function entryEditor(e, i) {
 /** 展開後顯示的條目細節。只有展開中的條目才會產生這段 HTML。 */
 function entryDetail(e, i) {
   const showingOutput = isOutputView();
-  if (S.editing === i) return entryEditor(e, i);
+  if (S.editMode && S.editing === i) return entryEditor(e, i);
   const chips = a => a.length
     ? a.map(k => `<code class="chip">${esc(k)}</code>`).join('')
     : '<span class="none">（無）</span>';
@@ -2274,14 +2310,14 @@ function entryDetail(e, i) {
     ['內容', `<span class="entd-meta">${content.length} 字元・${content ? content.split('\n').length : 0} 行</span>`],
   ].filter(Boolean);
 
-  return (showingOutput ? '<div class="result-note">目前顯示套用後的繁體結果；可直接編輯並切換啟用狀態，匯出時會保留這些調整。</div>' : '')
+  return (showingOutput ? `<div class="result-note">目前顯示轉換結果。${S.kinds[i] === 'data' ? '程式鍵名與必要的識別值會保留原形，這不是漏轉。' : ''}如需調整，請開啟上方「編輯模式」。</div>` : '')
     + rows.map(([lab, val]) =>
       `<div class="entd-row"><span class="entd-lab">${lab}</span><span class="entd-val">${val}</span></div>`).join('')
     + `<pre class="entd-body">${content ? esc(content) : '（空白）'}</pre>
-      <div class="edit-actions">
-        <button class="minor" type="button" data-entry-action="edit" data-i="${i}">編輯</button>
+      ${S.editMode ? `<div class="edit-actions">
+        <button class="minor" type="button" data-entry-action="edit" data-i="${i}">編輯此條目</button>
         ${(displayedEntryContentChangedAt(i) || displayedEntryStatusChangedAt(i)) ? `<button class="minor danger" type="button" data-entry-action="restore" data-i="${i}">還原此條目</button>` : ''}
-      </div>`;
+      </div>` : ''}`;
 }
 
 function renderEntries() {
@@ -2331,14 +2367,14 @@ function renderBookEntries() {
         ${issueCount ? `<span class="mini-badge hot">問題 ${issueCount}</span>` : ''}
         ${changed ? '<span class="mini-badge changed">已修改</span>' : ''}
       </span>
-      ${showingOutput ? '' : `<span class="seg" role="group">
+      ${S.editMode && !showingOutput ? `<span class="seg" role="group">
         <button data-i="${i}" data-k="data"   aria-pressed="${S.kinds[i] === 'data'}">資料</button>
         <button data-i="${i}" data-k="prompt" aria-pressed="${S.kinds[i] !== 'data'}">提示詞</button>
-      </span>`}
-      <label class="switch" title="${showingOutput ? '這項調整會直接寫入匯出結果' : '停用條目仍會接受校對與轉換'}">
+      </span>` : ''}
+      ${S.editMode ? `<label class="switch" title="${showingOutput ? '這項調整會直接寫入匯出結果' : '停用條目仍會接受校對與轉換'}">
         <input type="checkbox" data-enabled="${i}" ${enabled ? 'checked' : ''} aria-label="${esc(entryLabel(e))}啟用狀態">
         <span class="switch-track" aria-hidden="true"></span><span>${enabled ? '啟用' : '停用'}</span>
-      </label>
+      </label>` : `<span class="mini-badge">${enabled ? '啟用' : '停用'}</span>`}
       <span class="why">${esc(why)}</span></div>
       <div class="entd" id="entd-${i}" ${open ? '' : 'hidden'}>${open ? entryDetail(e, i) : ''}</div>
     </div>`;
@@ -2361,9 +2397,10 @@ function renderBookEntries() {
     if (action === 'cancel') { S.editing = null; renderEntries(); }
     if (action === 'restore') restoreEntry(i);
   }));
-  $('#entries').querySelectorAll('form.entry-edit').forEach(form => form.addEventListener('submit', e => {
-    e.preventDefault(); saveEntry(+form.dataset.editIndex, form);
-  }));
+  $('#entries').querySelectorAll('form.entry-edit').forEach(form => {
+    bindEditorDirty(form);
+    form.addEventListener('submit', e => { e.preventDefault(); form.dataset.dirty = 'false'; saveEntry(+form.dataset.editIndex, form); });
+  });
   $('#entries').querySelectorAll('.entry-edit textarea').forEach(autoGrowTextarea);
 }
 
@@ -2423,15 +2460,15 @@ function promptEditor(prompt, i) {
 
 function promptDetail(prompt, i, listed) {
   const key = `p:${i}`;
-  if (S.editing === key) return promptEditor(prompt, i);
+  if (S.editMode && S.editing === key) return promptEditor(prompt, i);
   const content = String(prompt.content ?? '');
   return `${isOutputView() ? '<div class="result-note">這是轉換後的 Prompt；可繼續編輯，匯出時會保留修改。</div>' : ''}
     <div class="entd-row"><span class="entd-lab">Identifier</span><span class="entd-val"><code class="chip">${esc(prompt.identifier || '（無）')}</code></span></div>
     <div class="entd-row"><span class="entd-lab">屬性</span><span class="entd-val"><span class="entd-meta">${esc([prompt.role || 'system', prompt.marker ? 'Marker' : '一般 Prompt', listed ? '已加入目前順序' : '未加入目前順序'].join('・'))}</span></span></div>
     <div class="entd-row"><span class="entd-lab">內容</span><span class="entd-val"><span class="entd-meta">${content.length} 字元・${content ? content.split('\n').length : 0} 行</span></span></div>
     <pre class="entd-body">${content ? esc(content) : '（空白／由 SillyTavern 動態填入）'}</pre>
-    <div class="edit-actions"><button class="minor" type="button" data-work-action="edit" data-item-type="prompt" data-i="${i}">編輯</button>
-      ${(presetPromptChangedAt(i) || presetPromptStatusChangedAt(i)) ? `<button class="minor danger" type="button" data-work-action="restore" data-item-type="prompt" data-i="${i}">還原此 Prompt</button>` : ''}</div>`;
+    ${S.editMode ? `<div class="edit-actions"><button class="minor" type="button" data-work-action="edit" data-item-type="prompt" data-i="${i}">編輯此 Prompt</button>
+      ${(presetPromptChangedAt(i) || presetPromptStatusChangedAt(i)) ? `<button class="minor danger" type="button" data-work-action="restore" data-item-type="prompt" data-i="${i}">還原此 Prompt</button>` : ''}</div>` : ''}`;
 }
 
 function regexEditor(script, record, embedded) {
@@ -2453,7 +2490,7 @@ function regexEditor(script, record, embedded) {
 function regexDetail(script, record, embedded) {
   const type = embedded ? 'embedded-regex' : 'regex';
   const key = `r:${record.collectionKey || 'standalone'}:${record.index}`;
-  if (S.editing === key) return regexEditor(script, record, embedded);
+  if (S.editMode && S.editing === key) return regexEditor(script, record, embedded);
   const changed = embedded ? embeddedRegexChangedAt(record.collectionKey, record.index) || embeddedRegexStatusChangedAt(record.collectionKey, record.index)
     : standaloneRegexChangedAt(record.index) || standaloneRegexStatusChangedAt(record.index);
   return `${isOutputView() ? '<div class="result-note">這是轉換後的正則；可繼續編輯，匯出時會保留修改。</div>' : ''}
@@ -2461,8 +2498,8 @@ function regexDetail(script, record, embedded) {
     <pre class="entd-body compact-code">${esc(script.findRegex || '（空白）')}</pre>
     <div class="entd-row"><span class="entd-lab">替換</span><span class="entd-val"><span class="entd-meta">${String(script.replaceString || '').length} 字元</span></span></div>
     <pre class="entd-body compact-code">${esc(script.replaceString || '（空白）')}</pre>
-    <div class="edit-actions"><button class="minor" type="button" data-work-action="edit" data-item-type="${type}" data-collection="${esc(record.collectionKey || '')}" data-i="${record.index}">編輯</button>
-      ${changed ? `<button class="minor danger" type="button" data-work-action="restore" data-item-type="${type}" data-collection="${esc(record.collectionKey || '')}" data-i="${record.index}">還原此正則</button>` : ''}</div>`;
+    ${S.editMode ? `<div class="edit-actions"><button class="minor" type="button" data-work-action="edit" data-item-type="${type}" data-collection="${esc(record.collectionKey || '')}" data-i="${record.index}">編輯此正則</button>
+      ${changed ? `<button class="minor danger" type="button" data-work-action="restore" data-item-type="${type}" data-collection="${esc(record.collectionKey || '')}" data-i="${record.index}">還原此正則</button>` : ''}</div>` : ''}`;
 }
 
 function renderRegexRow(record, embedded) {
@@ -2479,7 +2516,7 @@ function renderRegexRow(record, embedded) {
   return `<div class="ent-wrap ${enabled ? '' : 'is-off'}"><div class="ent">
     <button type="button" class="tw" data-work-toggle="${esc(key)}" aria-expanded="${open}"><span class="caret">▶</span><span class="nm">${esc(script.scriptName || `正則 ${record.index + 1}`)}</span></button>
     <span class="ent-headbadges"><span class="mini-badge regex-badge">正則</span>${invalid ? '<span class="mini-badge hot">語法錯誤</span>' : ''}${changed ? '<span class="mini-badge changed">已修改</span>' : ''}</span>
-    <label class="switch" title="停用正則仍會接受轉換"><input type="checkbox" data-regex-enabled="${record.index}" data-collection="${esc(record.collectionKey || '')}" ${enabled ? 'checked' : ''}><span class="switch-track"></span><span>${enabled ? '啟用' : '停用'}</span></label>
+    ${S.editMode ? `<label class="switch" title="停用正則仍會接受轉換"><input type="checkbox" data-regex-enabled="${record.index}" data-collection="${esc(record.collectionKey || '')}" ${enabled ? 'checked' : ''}><span class="switch-track"></span><span>${enabled ? '啟用' : '停用'}</span></label>` : `<span class="mini-badge">${enabled ? '啟用' : '停用'}</span>`}
     <span class="why">${esc(record.collectionKey || '獨立檔案')}</span></div>
     <div class="entd" ${open ? '' : 'hidden'}>${open ? regexDetail(script, record, embedded) : ''}</div></div>`;
 }
@@ -2508,7 +2545,7 @@ function renderPresetEntries() {
     return `<div class="ent-wrap ${enabled ? '' : 'is-off'}"><div class="ent">
       <button type="button" class="tw" data-work-toggle="${key}" aria-expanded="${open}"><span class="caret">▶</span><span class="nm">${esc(prompt.name || prompt.identifier || `Prompt ${index + 1}`)}</span></button>
       <span class="ent-headbadges"><span class="mini-badge">${prompt.marker ? 'Marker' : esc(prompt.role || 'system')}</span>${!listed ? '<span class="mini-badge hot">未加入順序</span>' : ''}${changed ? '<span class="mini-badge changed">已修改</span>' : ''}</span>
-      <label class="switch" title="${listed ? '切換目前順序群組中的狀態' : '開啟時會加入目前順序群組'}"><input type="checkbox" data-prompt-enabled="${index}" ${enabled ? 'checked' : ''}><span class="switch-track"></span><span>${enabled ? '啟用' : '停用'}</span></label>
+      ${S.editMode ? `<label class="switch" title="${listed ? '切換目前順序群組中的狀態' : '開啟時會加入目前順序群組'}"><input type="checkbox" data-prompt-enabled="${index}" ${enabled ? 'checked' : ''}><span class="switch-track"></span><span>${enabled ? '啟用' : '停用'}</span></label>` : `<span class="mini-badge">${enabled ? '啟用' : '停用'}</span>`}
       <span class="why mono">${esc(prompt.identifier || '無 identifier')}</span></div>
       <div class="entd" ${open ? '' : 'hidden'}>${open ? promptDetail(prompt, index, listed) : ''}</div></div>`;
   }).join('');
@@ -2551,9 +2588,11 @@ function bindSpecialEntryEvents() {
   $('#entries').querySelectorAll('input[data-regex-enabled]').forEach(input => input.addEventListener('change', () => setRegexEnabled(+input.dataset.regexEnabled, input.dataset.collection || '', input.checked)));
   $('#entries').querySelectorAll('form[data-editor-type]').forEach(form => form.addEventListener('submit', event => {
     event.preventDefault();
+    form.dataset.dirty = 'false';
     if (form.dataset.editorType === 'prompt') savePresetPrompt(+form.dataset.editIndex, form);
     else saveRegexScript(+form.dataset.editIndex, form.dataset.collection || '', form);
   }));
+  $('#entries').querySelectorAll('form[data-editor-type]').forEach(bindEditorDirty);
   $('#entries').querySelectorAll('.entry-edit textarea').forEach(autoGrowTextarea);
 }
 
@@ -2686,6 +2725,22 @@ function restoreSpecialItem(type, i, collectionKey) {
 function autoGrowTextarea(textarea) {
   const grow = () => { textarea.style.height = 'auto'; textarea.style.height = Math.min(textarea.scrollHeight + 2, window.innerHeight * .7) + 'px'; };
   textarea.addEventListener('input', grow); grow();
+}
+
+function bindEditorDirty(form) {
+  form.dataset.dirty = 'false';
+  const mark = () => { form.dataset.dirty = 'true'; };
+  form.addEventListener('input', mark);
+  form.addEventListener('change', mark);
+}
+
+function editorIsDirty() {
+  return !!$('#entries')?.querySelector?.('form.entry-edit[data-dirty="true"]');
+}
+
+function mayDiscardEditor(message) {
+  if (!editorIsDirty()) return true;
+  return confirm(message || '目前有尚未儲存的編輯。要捨棄這些輸入嗎？');
 }
 
 function invalidateOutput() {
@@ -2833,8 +2888,16 @@ function bindEntryTools() {
     renderEntries();
   });
   $('#restoreAll').addEventListener('click', restoreAllEntries);
+  $('#editModeToggle').addEventListener('click', () => {
+    const next = !S.editMode;
+    if (!next && !mayDiscardEditor()) return;
+    S.editMode = next;
+    if (!next) S.editing = null;
+    updateEditMode(); renderEntries(); renderWorkbenchStatus();
+  });
   $('#viewSwitch').querySelectorAll('button[data-view]').forEach(button => button.addEventListener('click', () => {
     if (button.dataset.view === 'output' && !S.out) return;
+    if (!mayDiscardEditor('目前有尚未儲存的編輯。要捨棄輸入並切換檢視嗎？')) return;
     S.viewMode = button.dataset.view;
     S.editing = null;
     updateViewSwitch(); renderCurrentMeta(); renderEntries(); renderWorkbenchStatus(); renderApplySummary(); renderPresetOrderTools();
@@ -2862,6 +2925,13 @@ function updateViewSwitch() {
     button.disabled = output && !S.out;
     button.setAttribute('aria-pressed', String(S.viewMode === button.dataset.view));
   });
+}
+
+function updateEditMode() {
+  const button = $('#editModeToggle');
+  button.setAttribute('aria-pressed', String(S.editMode));
+  button.textContent = S.editMode ? '結束編輯' : '編輯模式';
+  $('#restoreAll').classList.toggle('hidden', !S.editMode);
 }
 
 function updateFilterButtons() {
@@ -2895,7 +2965,7 @@ function renderWorkbenchStatus() {
   }
   const unresolved = unresolvedAmbiguities().length;
   $('#workStatus').innerHTML = [
-    `<b>${outputMode ? '轉換結果（可編輯）' : '編輯中'}</b>`,
+    `<b>${outputMode ? '轉換結果' : '原始內容'}・${S.editMode ? '編輯模式' : '預覽模式'}</b>`,
     `共 <b>${total}</b> 個${label}`,
     `${outputMode ? '結果已修改' : '已修改'} <b>${modified}</b>`,
     `${outputMode ? '結果已切換' : '已切換'} <b>${toggled}</b>`,
@@ -3242,6 +3312,10 @@ function renderDirs() {
 
 /* ---------- 執行 ---------- */
 async function run() {
+  if (editorIsDirty()) {
+    alert('還有尚未儲存的條目內容。請先按「儲存」，再套用轉換。');
+    return;
+  }
   const unresolved = S.card ? unresolvedAmbiguities().length : 0;
   if (unresolved && !confirm(`仍有 ${unresolved} 處疑義詞尚未處理。可以繼續套用與匯出，但這些位置只會做安全字形轉換，不會套用語意式替換。\n\n確定繼續嗎？`)) return;
   const btn = $('#run');
@@ -3321,6 +3395,8 @@ async function run() {
     S.outputSnapshot = cloneData(doc);
     S.lastRun = { changedCount, ambiguityDecisions: S.decisions.size, unresolved, done: [...r1.done], dirId: dir.id };
     S.viewMode = 'output';
+    S.editMode = false;
+    S.editing = null;
     const after = isRegex ? validateRegexFile(doc).issues
                 : isPreset ? validatePreset(doc).issues
                 : validate(doc, kindOf).issues;
@@ -3329,9 +3405,12 @@ async function run() {
 
     S.report = buildReport(after, r1.done, dir);
     $('#outsec').classList.remove('hidden');
-    $('#runState').textContent = `轉換完成：${changedCount} 處文字有變動${unresolved ? `，仍有 ${unresolved} 處疑義詞採安全保留` : ''}。`;
+    const protectedData = !isRegex && !isPreset ? S.kinds.filter(kind => kind === 'data').length : 0;
+    const lexicalNote = ['cn2tw', 'cn2t'].includes(dir.id) ? '；「信息／酒店」等同字形詞彙不會被自動改寫' : '';
+    $('#runState').textContent = `轉換完成：${changedCount} 處文字有變動${unresolved ? `，仍有 ${unresolved} 處疑義詞採安全保留` : ''}${protectedData ? `，${protectedData} 個資料條目的程式識別字已保留` : ''}${lexicalNote}。`;
     $('#runState').classList.add('done');
     updateViewSwitch();
+    updateEditMode();
     renderReportAfter(after);
     if (isRegex) { renderMetaRegex(); renderEntries(); renderWorkbenchStatus(); }
     else if (isPreset) { renderMetaPreset(); renderEntries(); renderWorkbenchStatus(); renderPresetOrderTools(); }
@@ -3339,7 +3418,7 @@ async function run() {
     renderApplySummary();
     renderAudit();
     if (left) $('#reportFold').open = true;
-    $('#entsec').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('#convertsec').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     say('發生錯誤：' + e.message);
     $('#runState').textContent = '轉換失敗：' + e.message;
@@ -3466,6 +3545,8 @@ globalThis.STProofreadingUI = Object.freeze({
   getWorkingEntries: () => entriesOf(),
   getDisplayedEntries: () => displayedEntriesOf(),
   getViewMode: () => S.viewMode,
+  getEditMode: () => S.editMode,
+  setEditMode: enabled => { S.editMode = !!enabled; S.editing = null; updateEditMode(); renderEntries(); renderWorkbenchStatus(); },
   editDisplayedEntry: (i, values) => commitDisplayedEntry(i, values),
   setDisplayedEntryEnabled,
   getDisplayedPreset: () => displayedPreset(),

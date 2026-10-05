@@ -106,8 +106,13 @@ test('converted entries stay editable without mutating the pre-conversion workin
   assert.match(context.STProofreadingUI.getWorkingEntries()[0].content, /角色皮肤/);
   await context.STProofreadingUI.run();
   assert.equal(context.STProofreadingUI.getViewMode(), 'output');
+  assert.equal(context.STProofreadingUI.getEditMode(), false);
   assert.match(context.STProofreadingUI.getDisplayedEntries()[0].content, /角色皮膚/);
   assert.match(context.STProofreadingUI.getWorkingEntries()[0].content, /角色皮肤/);
+  assert.doesNotMatch(dom.getElement('#entries').innerHTML, /class="switch"/);
+  context.STProofreadingUI.setEditMode(true);
+  assert.equal(context.STProofreadingUI.getEditMode(), true);
+  assert.match(dom.getElement('#entries').innerHTML, /class="switch"/);
 
   context.STProofreadingUI.editDisplayedEntry(0, { content: '  我手動修改繁體結果  \n{{user}} 😀' });
   context.STProofreadingUI.setDisplayedEntryEnabled(0, false);
@@ -115,6 +120,13 @@ test('converted entries stay editable without mutating the pre-conversion workin
   assert.equal(context.STProofreadingUI.getDisplayedEntries()[0].enabled, false);
   assert.match(context.STProofreadingUI.getWorkingEntries()[0].content, /角色皮肤/);
   assert.equal(context.STProofreadingUI.getWorkingEntries()[0].enabled, true);
+});
+
+test('export controls are placed above the workbench', () => {
+  const exportAt = html.indexOf('class="top-exports hidden" id="outsec"');
+  const workbenchAt = html.indexOf('<section id="entsec">');
+  assert.ok(exportAt > 0);
+  assert.ok(exportAt < workbenchAt);
 });
 
 test('preset workbench renders prompts and converts embedded regex_scripts when checked', async () => {
@@ -312,6 +324,50 @@ test('embedded OpenCC converts disabled entries while protected ambiguity occurr
   assert.match(converted.data.character_book.entries[1].content, /冷著一張冷面/);
   assert.match(converted.data.character_book.entries[1].content, /去吃冷麵/);
   assert.equal(converted.data.character_book.entries[0].extensions.vendor_flag, 'keep-me');
+});
+
+test('entry conversion covers memo/name fields, string keywords, narrative content, and regex trimStrings', () => {
+  const context = makeContext();
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  const core = context.STProofreadingCore;
+  const convert = context.OpenCC.Converter({ from: 'cn', to: 'tw' });
+  const card = {
+    data: {
+      character_book: {
+        entries: [
+          {
+            comment: '',
+            memo: '简体条目名称',
+            content: '这里是简体内容，按钮在后台。\n<div class="button">显示文字</div>\n{{user}}',
+            key: '触发词,  备用关键词  ',
+            enabled: true,
+          },
+          {
+            comment: '手机-基本设置',
+            content: '备注=这里是简体说明\n类型=角色\n程序之外的后台按钮说明',
+            enabled: false,
+          },
+        ],
+      },
+      extensions: {
+        regex_scripts: [{
+          scriptName: '皮肤规则', findRegex: '/角色皮肤/g', replaceString: '简体内容',
+          trimStrings: ['错误信息', '角色皮肤'], disabled: false,
+        }],
+      },
+    },
+  };
+  const converted = core.convertCard(card, { convert, doRegex: true, kindOf: (_entry, i) => i === 1 ? 'data' : 'prompt' }).card;
+  const [prompt, data] = converted.data.character_book.entries;
+  assert.equal(prompt.memo, '簡體條目名稱');
+  assert.match(prompt.content, /這裡是簡體內容/);
+  assert.match(prompt.content, />顯示文字<\/div>/);
+  assert.equal(prompt.key, '觸發詞,  備用關鍵詞  ');
+  assert.match(data.content, /^备注=這裡是簡體說明/m);
+  assert.match(data.content, /^类型=角色/m);
+  assert.match(data.content, /程序之外的後臺按鈕說明/);
+  assert.equal(data.comment, '手机-基本设置');
+  assert.match(converted.data.extensions.regex_scripts[0].trimStrings.join('\n'), /角色皮膚/);
 });
 
 test('PNG character-card payload round-trips with embedded character_book', () => {
