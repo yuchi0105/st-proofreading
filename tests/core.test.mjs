@@ -117,6 +117,108 @@ test('converted entries stay editable without mutating the pre-conversion workin
   assert.equal(context.STProofreadingUI.getWorkingEntries()[0].enabled, true);
 });
 
+test('preset workbench renders prompts and converts embedded regex_scripts when checked', async () => {
+  const context = makeContext();
+  const dom = installDomStub(context);
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  vm.runInContext(scripts[1], context, { filename: 'index-ui.js' });
+  const preset = fixture('preset-with-regex.json');
+  const bytes = new TextEncoder().encode(JSON.stringify(preset));
+  await context.STProofreadingUI.load({ name: 'preset-with-regex.json', async arrayBuffer() { return bytes.buffer; } });
+
+  assert.match(dom.getElement('#entries').innerHTML, /主要提示/);
+  assert.match(dom.getElement('#entries').innerHTML, /Regex Scripts/);
+  assert.equal(dom.getElement('#doRegex').checked, true);
+  dom.getElement('#dir').value = 'cn2tw';
+  await context.STProofreadingUI.run();
+
+  const converted = context.STProofreadingUI.getDisplayedPreset();
+  assert.match(converted.prompts[0].content, /角色皮膚/);
+  assert.match(converted.extensions.regex_scripts[0].scriptName, /皮膚樣式/);
+  assert.match(converted.extensions.regex_scripts[0].findRegex, /角色皮膚/);
+  assert.match(converted.extensions.regex_scripts[0].replaceString, /皮膚/);
+  assert.match(converted.extensions.regex_scripts[0].trimStrings.join('\n'), /角色皮膚/);
+  assert.equal(converted.extensions.regex_scripts[0].id, 'rx-preset-1');
+  assert.equal(converted.extensions.regex_scripts[0].unknown_regex_field, 'keep-regex');
+  assert.equal(converted.extensions.unknown_extension.keep, true);
+  assert.deepEqual(converted.unknown_preset_field, ['keep', 7]);
+});
+
+test('converted preset prompts and embedded regex remain editable for export', async () => {
+  const context = makeContext();
+  const dom = installDomStub(context);
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  vm.runInContext(scripts[1], context, { filename: 'index-ui.js' });
+  const bytes = new TextEncoder().encode(JSON.stringify(fixture('preset-with-regex.json')));
+  await context.STProofreadingUI.load({ name: 'preset-with-regex.json', async arrayBuffer() { return bytes.buffer; } });
+  dom.getElement('#dir').value = 'cn2tw';
+  await context.STProofreadingUI.run();
+
+  context.STProofreadingUI.editPresetPrompt(0, { content: '  手動修改後的繁體 Prompt  \n{{user}}' });
+  context.STProofreadingUI.setPresetPromptEnabled(0, false);
+  context.STProofreadingUI.editRegexScript(0, 'regex_scripts', {
+    scriptName: '自訂繁體正則',
+    findRegex: '/繁體角色/g',
+    replaceString: '<b>繁體內容</b>',
+  });
+  context.STProofreadingUI.setRegexEnabled(0, 'regex_scripts', false);
+
+  const exported = context.STProofreadingUI.exportObject();
+  assert.equal(exported.prompts[0].content, '  手動修改後的繁體 Prompt  \n{{user}}');
+  assert.equal(exported.prompt_order[0].order[0].enabled, false);
+  assert.equal(exported.extensions.regex_scripts[0].scriptName, '自訂繁體正則');
+  assert.equal(exported.extensions.regex_scripts[0].findRegex, '/繁體角色/g');
+  assert.equal(exported.extensions.regex_scripts[0].disabled, true);
+  assert.equal(exported.prompts[0].identifier, 'main');
+  assert.equal(exported.prompt_order[0].unknown_order_field, 'keep-order');
+});
+
+test('standalone worldbook shows editable entries before and after conversion', async () => {
+  const context = makeContext();
+  const dom = installDomStub(context);
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  vm.runInContext(scripts[1], context, { filename: 'index-ui.js' });
+  const bytes = new TextEncoder().encode(JSON.stringify(fixture('standalone-worldbook.json')));
+  await context.STProofreadingUI.load({ name: 'worldbook.json', async arrayBuffer() { return bytes.buffer; } });
+  assert.match(dom.getElement('#entries').innerHTML, /城市資料/);
+  assert.match(dom.getElement('#entries').innerHTML, /停用但仍須校對/);
+  dom.getElement('#dir').value = 'cn2tw';
+  await context.STProofreadingUI.run();
+  context.STProofreadingUI.editDisplayedEntry(0, { content: '  繁體世界書內容  \n{{user}}' });
+  context.STProofreadingUI.setDisplayedEntryEnabled(0, false);
+  const exported = context.STProofreadingUI.exportObject();
+  assert.equal(exported.entries['101'].content, '  繁體世界書內容  \n{{user}}');
+  assert.equal(exported.entries['101'].disable, true);
+  assert.equal(exported.entries['101'].uid, 101);
+  assert.equal(exported.entries['101'].extensions.vendor_flag, 'keep-me');
+  assert.equal(exported.custom_book_field, 'must-survive');
+});
+
+test('standalone regex scripts are visible, converted, editable, and keep unknown fields', async () => {
+  const context = makeContext();
+  const dom = installDomStub(context);
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  vm.runInContext(scripts[1], context, { filename: 'index-ui.js' });
+  const source = [{
+    id: 'standalone-rx', scriptName: '皮肤样式', findRegex: '/角色皮肤/g',
+    replaceString: '<i>皮肤信息</i>', trimStrings: ['错误信息'], disabled: false,
+    placement: [2], unknown: 'keep',
+  }];
+  const bytes = new TextEncoder().encode(JSON.stringify(source));
+  await context.STProofreadingUI.load({ name: 'regex.json', async arrayBuffer() { return bytes.buffer; } });
+  assert.match(dom.getElement('#entries').innerHTML, /皮肤样式/);
+  dom.getElement('#dir').value = 'cn2tw';
+  await context.STProofreadingUI.run();
+  assert.match(context.STProofreadingUI.getDisplayedRegex()[0].findRegex, /角色皮膚/);
+  context.STProofreadingUI.editRegexScript(0, '', { replaceString: '<i>自訂繁體</i>' });
+  context.STProofreadingUI.setRegexEnabled(0, '', false);
+  const exported = context.STProofreadingUI.exportObject();
+  assert.equal(exported[0].replaceString, '<i>自訂繁體</i>');
+  assert.equal(exported[0].disabled, true);
+  assert.equal(exported[0].unknown, 'keep');
+  assert.deepEqual(exported[0].placement, [2]);
+});
+
 test('standalone worldbook keeps disable semantics and every unknown field', () => {
   const { STProofreadingCore: core } = makeContext();
   const original = fixture('standalone-worldbook.json');

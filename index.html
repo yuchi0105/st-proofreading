@@ -6,20 +6,24 @@
 <title>酒館卡片校對台 — 安全繁化與條目驗證</title>
 <style>
   :root{
-    --paper:#e7e9e5;
-    --leaf:#f7f8f5;
-    --ink:#1b211f;
-    --soft:#6c7873;
-    --rule:#c9cec8;
-    --pen:#a8362b;
-    --pass:#2c6552;
-    --amber:#8a6512;
-    --shadow:0 1px 0 rgba(27,33,31,.06), 0 8px 24px -18px rgba(27,33,31,.5);
+    --paper:#edf0ec;
+    --leaf:#fbfaf7;
+    --ink:#3e4945;
+    --soft:#65736d;
+    --rule:#d4dad5;
+    --pen:#886a74;
+    --pass:#627f75;
+    --amber:#9a815b;
+    --sage:#dfe8e2;
+    --rose:#eadfe2;
+    --sand:#eee7dc;
+    --lavender:#e4e4ec;
+    --shadow:0 10px 30px -24px rgba(62,73,69,.55),0 1px 2px rgba(62,73,69,.05);
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
   body{
-    margin:0;padding:0;background:var(--paper);color:var(--ink);
+    margin:0;padding:0;background:linear-gradient(180deg,#f2f4f1 0,var(--paper) 38%,#e9eeea 100%);color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
     font-size:15px;line-height:1.65;
   }
@@ -28,7 +32,7 @@
   .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 
   /* ---------- header ---------- */
-  header{border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:26px}
+  header{border-bottom:1px solid var(--rule);padding:8px 4px 20px;margin-bottom:22px}
   .eyebrow{
     font-size:11px;letter-spacing:.22em;text-transform:uppercase;
     color:var(--soft);margin-bottom:10px
@@ -43,10 +47,10 @@
   /* ---------- drop zone: paste-up box ---------- */
   .drop{
     margin:0 0 20px;padding:24px 20px;text-align:center;
-    background:var(--leaf);border:1.5px dashed var(--rule);cursor:pointer;
-    transition:border-color .15s,background .15s
+    background:rgba(251,250,247,.86);border:1.5px dashed #b9c5bf;border-radius:16px;cursor:pointer;
+    box-shadow:var(--shadow);transition:border-color .15s,background .15s,transform .15s
   }
-  .drop:hover,.drop.over{border-color:var(--pen);background:#fff}
+  .drop:hover,.drop.over{border-color:var(--pass);background:#fff;transform:translateY(-1px)}
   .drop.over{border-style:solid}
   .drop-t{font-size:16px;font-weight:600;margin-bottom:5px}
   .drop-s{font-size:12.5px;color:var(--soft)}
@@ -64,7 +68,7 @@
   .h2sub{font-size:12.5px;color:var(--soft);margin:0 0 14px;padding-bottom:9px;border-bottom:1px solid var(--rule)}
 
   /* ---------- summary ---------- */
-  .meta{display:flex;flex-wrap:wrap;gap:0;background:var(--leaf);box-shadow:var(--shadow)}
+  .meta{display:flex;flex-wrap:wrap;gap:0;background:var(--leaf);box-shadow:var(--shadow);border:1px solid var(--rule);border-radius:14px;overflow:hidden}
   .meta div{flex:1 1 120px;padding:13px 15px;border-right:1px solid var(--rule)}
   .meta div:last-child{border-right:0}
   .meta dt{font-size:11px;letter-spacing:.1em;color:var(--soft);margin-bottom:3px}
@@ -73,14 +77,14 @@
 
   /* ---------- compact conversion panel ---------- */
   .convert-panel{
-    position:relative;background:#202724;color:var(--leaf);padding:15px 16px;
-    box-shadow:0 12px 30px -22px rgba(0,0,0,.8);border-top:3px solid var(--pen)
+    position:relative;background:linear-gradient(135deg,#64766f,#596b66);color:var(--leaf);padding:16px 17px;
+    box-shadow:0 16px 34px -25px rgba(50,64,59,.9);border:1px solid rgba(255,255,255,.24);border-radius:16px
   }
   .convert-panel h2{color:#fff;margin-bottom:10px}
   .convert-row{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:8px;align-items:stretch}
   .convert-row select{max-width:none;min-height:48px;border:0}
   .convert-row .act{min-height:48px;padding:10px 18px;white-space:nowrap}
-  .convert-state{margin:8px 0 0;font-size:12px;color:#bac4bf}
+  .convert-state{margin:8px 0 0;font-size:12px;color:#dde5e1}
   .convert-state.done{color:#b9e3d2}
   .convert-options{margin-top:10px;border-top:1px solid rgba(255,255,255,.16)}
   .convert-options>summary{
@@ -90,15 +94,16 @@
   .convert-options>summary::-webkit-details-marker{display:none}
   .convert-options>summary::before{content:'＋';color:#f0b053;font-size:16px}
   .convert-options[open]>summary::before{content:'－'}
-  .convert-options-body{background:var(--paper);color:var(--ink);padding:12px;margin:0 -6px -6px}
+  .convert-options-body{background:#f4f3ef;color:var(--ink);padding:12px;margin:0 -6px -6px;border-radius:12px}
   .convert-options-body .apply-summary{margin-bottom:10px}
   .convert-options-body .warnbox{margin-bottom:10px}
 
   /* ---------- entry classification ---------- */
   .ent{
     display:flex;align-items:center;gap:12px;padding:9px 13px;
-    background:var(--leaf);border-bottom:1px solid var(--rule);font-size:13.5px
+    background:var(--leaf);border-bottom:1px solid var(--rule);font-size:13.5px;transition:background .15s
   }
+  .ent-wrap:hover>.ent{background:#f7f7f2}
   .ent:last-child{border-bottom:0}
   .ent .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .ent .why{color:var(--soft);font-size:11.5px;flex:none;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -108,7 +113,7 @@
     color:var(--soft);cursor:pointer;letter-spacing:.04em;min-height:44px
   }
   .seg button[aria-pressed=true]{background:var(--ink);color:var(--leaf)}
-  .box{background:var(--leaf);box-shadow:var(--shadow)}
+  .box{background:var(--leaf);box-shadow:var(--shadow);border:1px solid var(--rule);border-radius:14px;overflow:hidden}
 
   /* ---------- entry detail: expandable ---------- */
   .ent-wrap{border-bottom:1px solid var(--rule)}
@@ -155,36 +160,47 @@
   .work-topline{display:flex;gap:10px;align-items:stretch;margin-bottom:10px}
   .work-status{
     flex:1;display:flex;flex-wrap:wrap;gap:7px 16px;margin:0;padding:10px 13px;
-    background:#fff;border:1px solid var(--rule);font-size:12px;color:var(--soft)
+    background:rgba(251,250,247,.9);border:1px solid var(--rule);border-radius:12px;font-size:12px;color:var(--soft)
   }
   .work-status b{color:var(--ink);font-variant-numeric:tabular-nums}
-  .view-switch{display:flex;border:1px solid var(--rule);background:#fff}
-  .view-switch button{min-height:44px;padding:7px 11px;border:0;background:#fff;color:var(--soft);font:inherit;font-size:12px;cursor:pointer}
+  .view-switch{display:flex;border:1px solid var(--rule);background:#fff;border-radius:12px;overflow:hidden}
+  .view-switch button{min-height:44px;padding:7px 12px;border:0;background:#fff;color:var(--soft);font:inherit;font-size:12px;cursor:pointer}
   .view-switch button[aria-pressed=true]{background:var(--pass);color:#fff}
   .view-switch button:disabled{color:#abb2ae;cursor:not-allowed}
   .work-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:8px;margin-bottom:10px;align-items:start}
   .work-search{
     width:100%;min-height:44px;padding:8px 11px;border:1px solid var(--rule);
-    background:#fff;color:var(--ink);font:inherit;font-size:13px
+    background:#fff;color:var(--ink);font:inherit;font-size:13px;border-radius:11px
   }
   .filterbar{display:flex;flex-wrap:wrap;gap:5px}
   .filterbar button,.minor{
-    min-height:44px;padding:7px 11px;border:1px solid var(--rule);background:var(--leaf);
+    min-height:44px;padding:7px 11px;border:1px solid var(--rule);border-radius:10px;background:var(--leaf);
     color:var(--soft);font:inherit;font-size:12px;cursor:pointer
   }
   .filterbar button[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--leaf)}
   .filterbar button:hover,.minor:hover{border-color:var(--pen);color:var(--pen)}
   .filter-menu{position:relative}
-  .filter-menu>summary{list-style:none;min-height:44px;padding:8px 13px;border:1px solid var(--rule);background:var(--leaf);font-size:12px;cursor:pointer;display:flex;align-items:center}
+  .filter-menu>summary{list-style:none;min-height:44px;padding:8px 13px;border:1px solid var(--rule);border-radius:10px;background:var(--leaf);font-size:12px;cursor:pointer;display:flex;align-items:center}
   .filter-menu>summary::-webkit-details-marker{display:none}
-  .filter-menu[open] .filterbar{position:absolute;z-index:5;right:0;top:48px;width:min(420px,calc(100vw - 36px));padding:8px;background:#fff;border:1px solid var(--rule);box-shadow:var(--shadow)}
+  .filter-menu[open] .filterbar{position:absolute;z-index:5;right:0;top:48px;width:min(420px,calc(100vw - 36px));padding:8px;background:#fff;border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow)}
+  .preset-order{display:flex;align-items:end;gap:12px;margin:0 0 10px;padding:11px 13px;background:var(--sand);border:1px solid #ddd3c4;border-radius:12px}
+  .preset-order label{display:grid;gap:4px;min-width:min(360px,100%);font-size:11px;color:#756b5d;letter-spacing:.04em}
+  .preset-order select{min-height:42px;background:#fffdf9}
+  .preset-order>span{font-size:11.5px;color:#7e7466;padding-bottom:9px}
+  .work-group-title{display:flex;align-items:center;justify-content:space-between;padding:10px 13px;background:#e7ece8;border-bottom:1px solid var(--rule);color:#56665f;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase}
+  .work-group-title b{font-variant-numeric:tabular-nums;font-weight:600}
+  .work-group-title:not(:first-child){border-top:8px solid var(--paper)}
+  .empty-group{padding:18px 14px;text-align:center;color:var(--soft);font-size:12.5px;background:#f9f9f6}
+  .compact-code{max-height:180px}
+  .advanced-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .minor.danger{color:var(--pen)}
   .ent-wrap.is-off{opacity:.58}
   .ent-wrap.is-off:focus-within,.ent-wrap.is-off:hover{opacity:.82}
   .ent-headbadges{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
-  .mini-badge{font-size:10.5px;line-height:1.3;padding:2px 6px;border:1px solid var(--rule);color:var(--soft);white-space:nowrap}
+  .mini-badge{font-size:10.5px;line-height:1.3;padding:3px 7px;border:1px solid #c9d2cd;border-radius:99px;background:#f4f6f3;color:var(--soft);white-space:nowrap}
   .mini-badge.hot{border-color:var(--amber);color:var(--amber)}
-  .mini-badge.changed{border-color:var(--pen);color:var(--pen)}
+  .mini-badge.changed{border-color:#cbb3ba;background:var(--rose);color:#765762}
+  .mini-badge.regex-badge{border-color:#c7c8d5;background:var(--lavender);color:#62677d}
   .switch{
     position:relative;display:inline-flex;align-items:center;gap:6px;min-height:44px;
     font-size:11.5px;color:var(--soft);cursor:pointer;white-space:nowrap
@@ -200,12 +216,12 @@
   .edit-grid{display:grid;gap:10px;margin-top:8px}
   .edit-field{display:grid;gap:4px;font-size:11.5px;color:var(--soft)}
   .edit-field input,.edit-field textarea{
-    width:100%;padding:9px 10px;border:1px solid var(--rule);background:#fff;color:var(--ink);
+    width:100%;padding:10px 11px;border:1px solid var(--rule);border-radius:9px;background:#fff;color:var(--ink);
     font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;resize:vertical
   }
   .edit-field textarea{min-height:180px;field-sizing:content;max-height:70vh}
   .edit-field textarea.keys-editor{min-height:72px}
-  .advanced{border:1px solid var(--rule);background:#fff;padding:8px 10px}
+  .advanced{border:1px solid var(--rule);border-radius:10px;background:#f8f8f5;padding:8px 10px}
   .advanced summary{cursor:pointer;color:var(--soft);font-size:12px}
   .data-risk{margin:8px 0 0;border-left:3px solid var(--amber);background:#faf6ec;padding:8px 10px;color:#5f4a17;font-size:11.5px}
   .confirm-box{margin:0 0 12px;background:var(--leaf);box-shadow:var(--shadow)}
@@ -232,9 +248,9 @@
   .summary-grid b{color:var(--ink)}
   .summary-diff{margin-top:9px;padding-top:8px;border-top:1px dotted var(--rule);font-size:11.5px;color:var(--soft);max-height:150px;overflow:auto}
   .summary-diff div{padding:2px 0}
-  .result-note{margin:0 0 8px;padding:8px 10px;background:#edf7f2;border-left:3px solid var(--pass);font-size:12px;color:var(--pass)}
+  .result-note{margin:0 0 8px;padding:9px 11px;background:var(--sage);border-radius:8px;border-left:3px solid var(--pass);font-size:12px;color:#4f6d64}
 
-  .fold-section{background:var(--leaf);box-shadow:var(--shadow)}
+  .fold-section{background:var(--leaf);box-shadow:var(--shadow);border:1px solid var(--rule);border-radius:14px;overflow:hidden}
   .fold-section>summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;align-items:center;gap:12px}
   .fold-section>summary::-webkit-details-marker{display:none}
   .fold-section>summary h2{margin:0;flex:none}
@@ -291,7 +307,7 @@
   label.ck span small{display:block;color:var(--soft);font-size:11.5px;line-height:1.5}
   select{
     font:inherit;font-size:14px;padding:9px 11px;background:#fff;color:var(--ink);
-    border:1px solid var(--rule);width:100%;max-width:420px
+    border:1px solid var(--rule);border-radius:10px;width:100%;max-width:420px
   }
   .warnbox{
     border-left:3px solid var(--amber);background:#faf6ec;padding:11px 14px;
@@ -301,13 +317,13 @@
 
   button.act{
     font:inherit;font-size:14px;font-weight:600;letter-spacing:.06em;
-    padding:13px 24px;border:0;cursor:pointer;background:var(--ink);color:var(--leaf)
+    padding:13px 24px;border:0;border-radius:10px;cursor:pointer;background:#46534f;color:var(--leaf)
   }
-  button.act.primary{background:var(--pen)}
+  button.act.primary{background:#886a74}
   button.act:disabled{background:var(--rule);color:#8d968f;cursor:default}
   button.act:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
 
-  .kindtag{font-size:11px;letter-spacing:.1em;color:var(--leaf);background:var(--ink);padding:2px 8px;font-weight:400}
+  .kindtag{font-size:11px;letter-spacing:.1em;color:#53645e;background:var(--sage);border-radius:99px;padding:3px 9px;font-weight:500}
 
   .snip{
     margin-top:8px;padding:7px 9px;background:#fff;border:1px solid var(--rule);
@@ -377,6 +393,9 @@
     .view-switch button{flex:1}
     .work-toolbar{grid-template-columns:1fr auto}
     .filterbar button{flex:1 1 auto}
+    .preset-order{display:block}
+    .preset-order>span{display:block;padding:7px 1px 0}
+    .advanced-grid{grid-template-columns:1fr}
     .ent-headbadges{order:3;flex:1 1 100%;padding-left:20px}
     .switch{margin-left:auto}
     .confirm-candidates button{flex:1 1 auto}
@@ -438,7 +457,7 @@
 
   <section id="entsec">
     <h2><span class="n">02</span>條目工作台 <span class="kindtag hidden" id="confirmBadge"></span></h2>
-    <p class="h2sub">
+    <p class="h2sub" id="workIntro">
       <b>資料</b>＝腳本讀取，名稱與鍵名必須維持簡體。<b>提示詞</b>＝AI 讀取，全部轉成繁體。
       可在這裡調整分類、啟用狀態與內容；停用條目仍會接受校對與繁簡轉換。
     </p>
@@ -457,12 +476,18 @@
           <button type="button" data-filter="status" data-value="all" aria-pressed="true">全部</button>
           <button type="button" data-filter="status" data-value="enabled" aria-pressed="false">啟用</button>
           <button type="button" data-filter="status" data-value="disabled" aria-pressed="false">停用</button>
-          <button type="button" data-filter="kind" data-value="data" aria-pressed="false">資料</button>
-          <button type="button" data-filter="kind" data-value="prompt" aria-pressed="false">提示詞</button>
-          <button type="button" data-filter="confirm" data-value="true" aria-pressed="false">需要確認</button>
+          <button class="book-filter" type="button" data-filter="kind" data-value="data" aria-pressed="false">資料</button>
+          <button class="book-filter" type="button" data-filter="kind" data-value="prompt" aria-pressed="false">提示詞</button>
+          <button class="book-filter" type="button" data-filter="confirm" data-value="true" aria-pressed="false">需要確認</button>
           <button type="button" data-filter="modified" data-value="true" aria-pressed="false">已修改</button>
         </div>
       </details>
+    </div>
+    <div class="preset-order hidden" id="presetOrderTools">
+      <label>Prompt 順序群組
+        <select id="presetOrderGroup" aria-label="Prompt 順序群組"></select>
+      </label>
+      <span id="presetOrderNote"></span>
     </div>
     <details class="confirm-box hidden" id="ambiguities"></details>
     <div class="ent-tools" id="enttools">
@@ -1454,6 +1479,7 @@ function unwrapWorldbook(orig, pseudo, uids) {
 
 /* ---------- 預設 ---------- */
 const PRESET_TEXT_FIELDS = [
+  'name',
   'impersonation_prompt', 'new_chat_prompt', 'new_group_chat_prompt', 'new_example_chat_prompt',
   'continue_nudge_prompt', 'group_nudge_prompt', 'send_if_empty', 'assistant_prefill',
   'assistant_impersonation', 'human_sysprompt_message', 'wi_format', 'scenario_format',
@@ -1461,6 +1487,16 @@ const PRESET_TEXT_FIELDS = [
 ];
 
 const presetPrompts = p => Array.isArray(p.prompts) ? p.prompts : [];
+
+/** 找出預設內所有已存在的正則容器；寫回時維持原欄位，不替來源搬家。 */
+function presetRegexCollections(p) {
+  const out = [];
+  if (Array.isArray(p?.extensions?.regex_scripts)) out.push({ key: 'regex_scripts', list: p.extensions.regex_scripts });
+  if (Array.isArray(p?.extensions?.regex)) out.push({ key: 'regex', list: p.extensions.regex });
+  return out;
+}
+
+const presetRegexScripts = p => presetRegexCollections(p).flatMap(x => x.list);
 
 /**
  * 轉換預設。identifier 與 prompt_order 完全不動 —— 它們是程式配對用的鍵，
@@ -1485,14 +1521,11 @@ function convertPreset(presetIn, opts) {
       const v = convertPrompt(pr.content, convert); note(`「${pr.name}」內容`, pr.content, v); pr.content = v;
     }
   }
-  if (opts.doRegex && Array.isArray(p.extensions?.regex)) {
-    for (const r of p.extensions.regex) {
-      if (r.scriptName) { const v = convert(r.scriptName); note('正則名稱', r.scriptName, v); r.scriptName = v; }
-      for (const f of ['findRegex', 'replaceString']) {
-        if (typeof r[f] === 'string' && r[f]) {
-          const v = protectedConvert(r[f], convert, [P_URL, P_HEX]); note(`正則 ${f}`, r[f], v); r[f] = v;
-        }
-      }
+  if (opts.doRegex) {
+    for (const collection of presetRegexCollections(p)) {
+      const r = convertRegexFile(collection.list, { convert });
+      p.extensions[collection.key] = r.list;
+      r.changed.forEach(x => note(`內嵌正則｜${x.where}`, x.before, x.after));
     }
   }
   return { preset: p, changed };
@@ -1814,6 +1847,7 @@ let S = {
   kinds: [], open: new Set(), statusFields: [], decisions: new Map(), ambiguities: [],
   editing: null, filters: { search: '', status: 'all', kind: 'all', confirm: false, modified: false },
   previewConvert: null, lastRun: null, viewMode: 'work', outputSnapshot: null,
+  presetOrderIndex: 0,
 };
 
 /* ---------- OpenCC ---------- */
@@ -1859,7 +1893,7 @@ async function load(file) {
     const buf = await file.arrayBuffer();
     S.srcBuf = buf;
     S.wb = null; S.uids = null; S.preset = null; S.rx = null; S.open = new Set();
-    S.decisions = new Map(); S.ambiguities = []; S.editing = null; S.previewConvert = null; S.lastRun = null; S.viewMode = 'work'; S.outputSnapshot = null;
+    S.decisions = new Map(); S.ambiguities = []; S.editing = null; S.previewConvert = null; S.lastRun = null; S.viewMode = 'work'; S.outputSnapshot = null; S.presetOrderIndex = 0;
     S.filters = { search: '', status: 'all', kind: 'all', confirm: false, modified: false };
     $('#entrySearch').value = '';
     $('#reportFold').open = false;
@@ -1889,13 +1923,15 @@ async function load(file) {
       else throw new Error('無法辨識這個 JSON。支援角色卡、世界書、預設、正則腳本四種。');
     }
     S.originalCard = S.card ? cloneData(S.card) : null;
+    if (S.kind === 'preset') S.presetOrderIndex = bestPresetOrderIndex(S.preset);
     S.out = null;
     $('#app').classList.remove('hidden');
     // 反查表讓「基本設置 / 基本設定」這類中間態都能被還原
     loadOpenCC().then(OC => {
       buildReverseIndex(OC);
       S.previewConvert = OC.Converter({ from: 'cn', to: 'tw' });
-      if (S.card) { refreshAmbiguities(); renderEntries(); renderAmbiguities(); renderWorkbenchStatus(); renderApplySummary(); }
+      if (S.card) refreshAmbiguities();
+      renderEntries(); renderAmbiguities(); renderWorkbenchStatus(); renderApplySummary();
       renderReport(); renderFixes(); renderDirs();
     })
                 .catch(() => {});
@@ -1903,8 +1939,9 @@ async function load(file) {
     $('#log').classList.add('hidden');
     $('#runState').textContent = '設定好條目後即可套用；完成時工作台會直接顯示轉換結果。';
     $('#runState').classList.remove('done');
-    if (S.kind === 'preset') { renderMetaPreset(); renderReport(); renderFixes(); renderDirs(); renderApplySummary(); }
-    else if (S.kind === 'regex') { renderMetaRegex(); renderReport(); renderFixes(); renderDirs(); renderApplySummary(); }
+    configureWorkbench();
+    if (S.kind === 'preset') { renderMetaPreset(); renderEntries(); renderWorkbenchStatus(); renderReport(); renderFixes(); renderDirs(); renderApplySummary(); }
+    else if (S.kind === 'regex') { renderMetaRegex(); renderEntries(); renderWorkbenchStatus(); renderReport(); renderFixes(); renderDirs(); renderApplySummary(); }
     else {
       initKinds();
       S.statusFields = entriesOf().map(e => detectEntryEnabledField(e, S.kind));
@@ -1913,10 +1950,14 @@ async function load(file) {
     }
     renderAudit();
     updateViewSwitch();
-    // 正則檔跟預設一樣沒有「條目」可以列
-    $('#entsec').classList.toggle('hidden', S.kind === 'preset' || S.kind === 'regex');
-    // 正則檔整份都是正則，這個「要不要一併轉正則」的選項就沒有意義了
-    $('#doRegexRow').classList.toggle('hidden', S.kind === 'regex');
+    $('#entsec').classList.remove('hidden');
+    const embeddedRegexCount = S.kind === 'preset' ? presetRegexScripts(S.preset).length
+      : S.kind === 'card' ? ((S.card?.data || S.card)?.extensions?.regex_scripts || []).length : 0;
+    $('#doRegex').checked = embeddedRegexCount > 0;
+    $('#doRegexRow').classList.toggle('hidden', S.kind === 'regex' || embeddedRegexCount === 0);
+    const regexHint = $('#doRegexRow').querySelector('small');
+    if (embeddedRegexCount && regexHint) regexHint.textContent = `將同步處理 ${embeddedRegexCount} 條正則。會保護巨集、HTML、網址與色碼；轉換後仍建議檢查一次。`;
+    renderApplySummary();
     $('#kindtag').textContent =
       { card: '角色卡', worldbook: '世界書', preset: '預設', regex: '正則腳本' }[S.kind] || '';
     $('#app').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1932,6 +1973,64 @@ const displayedEntriesOf = () => entriesOf(displayedCard());
 const originalEntriesOf = () => entriesOf(S.originalCard);
 const outputSnapshotEntriesOf = () => entriesOf(S.outputSnapshot);
 const isOutputView = () => S.viewMode === 'output' && !!S.out;
+const workingPreset = () => S.preset;
+const displayedPreset = () => isOutputView() ? S.out : S.preset;
+const originalPreset = () => S.originalSource;
+const workingRegex = () => S.rx || [];
+const displayedRegex = () => isOutputView() ? (S.out || []) : workingRegex();
+const originalRegex = () => S.kind === 'regex' && S.originalSource ? normalizeRegexFile(S.originalSource).list : [];
+const outputSnapshotRegex = () => S.kind === 'regex' && Array.isArray(S.outputSnapshot) ? S.outputSnapshot : [];
+
+function presetOrderGroups(p) {
+  return Array.isArray(p?.prompt_order) ? p.prompt_order.filter(x => x && Array.isArray(x.order)) : [];
+}
+
+function bestPresetOrderIndex(p) {
+  const groups = presetOrderGroups(p);
+  if (!groups.length) return 0;
+  let best = 0;
+  groups.forEach((g, i) => { if (g.order.length > groups[best].order.length) best = i; });
+  return best;
+}
+
+function selectedPresetOrder(p) {
+  const groups = presetOrderGroups(p);
+  return groups[Math.min(S.presetOrderIndex, Math.max(0, groups.length - 1))] || null;
+}
+
+function presetPromptOrderEntry(p, prompt) {
+  return selectedPresetOrder(p)?.order.find(x => x.identifier === prompt.identifier) || null;
+}
+
+function presetPromptEnabled(p, prompt) {
+  const order = presetPromptOrderEntry(p, prompt);
+  if (order) return order.enabled !== false;
+  return owns(prompt, 'enabled') ? prompt.enabled !== false : false;
+}
+
+function orderedPresetPromptRows(p) {
+  const prompts = presetPrompts(p);
+  const group = selectedPresetOrder(p);
+  if (!group) return prompts.map((prompt, index) => ({ prompt, index, listed: false }));
+  const used = new Set(), rows = [];
+  for (const order of group.order) {
+    const index = prompts.findIndex((prompt, i) => !used.has(i) && prompt.identifier === order.identifier);
+    if (index < 0) continue;
+    used.add(index); rows.push({ prompt: prompts[index], index, listed: true });
+  }
+  prompts.forEach((prompt, index) => { if (!used.has(index)) rows.push({ prompt, index, listed: false }); });
+  return rows;
+}
+
+function presetRegexRecords(p) {
+  return presetRegexCollections(p).flatMap(collection =>
+    collection.list.map((script, index) => ({ script, index, collectionKey: collection.key })));
+}
+
+function presetRegexRecordAt(p, collectionKey, index) {
+  return presetRegexCollections(p).find(x => x.key === collectionKey)?.list[index] || null;
+}
+
 function initKinds() { S.kinds = entriesOf().map(e => classifyEntry(e).kind); }
 const kindOf = (e, i) => S.kinds[i] || 'prompt';
 
@@ -1967,15 +2066,16 @@ function renderMeta() {
 }
 
 function renderMetaPreset() {
-  const p = S.out || S.preset;
+  const p = displayedPreset();
   const ps = p.prompts || [];
-  const enabled = new Set();
-  for (const b of p.prompt_order || []) for (const o of b.order || []) if (o.enabled) enabled.add(o.identifier);
+  const regexes = presetRegexScripts(p);
   const cells = [
     ['預設來源', p.chat_completion_source || '（未指定）', 'sm'],
     ['模型', p.claude_model || p.openai_model || p.google_model || p.custom_model || '—', 'sm'],
     ['提示詞', ps.length, ''],
-    ['已啟用', ps.filter(x => enabled.has(x.identifier)).length, ''],
+    ['已啟用', ps.filter(x => presetPromptEnabled(p, x)).length, ''],
+    ['正則', regexes.length, ''],
+    ['正則啟用', regexes.filter(x => !x.disabled).length, ''],
     ['中文識別碼', ps.filter(x => /[\u4e00-\u9fff]/.test(x.identifier || '')).length, ''],
   ];
   $('#meta').innerHTML = cells.map(([t, v, c]) =>
@@ -1983,7 +2083,7 @@ function renderMetaPreset() {
 }
 
 function renderMetaRegex() {
-  const list = S.out || S.rx || [];
+  const list = displayedRegex();
   const cells = [
     ['正則腳本', list.length, ''],
     ['已啟用', list.filter(r => !r.disabled).length, ''],
@@ -1992,6 +2092,45 @@ function renderMetaRegex() {
   ];
   $('#meta').innerHTML = cells.map(([t, v, c]) =>
     `<div><dt>${t}</dt><dd class="${c}">${esc(v)}</dd></div>`).join('');
+}
+
+function renderCurrentMeta() {
+  if (S.kind === 'preset') renderMetaPreset();
+  else if (S.kind === 'regex') renderMetaRegex();
+  else renderMeta();
+}
+
+function configureWorkbench() {
+  const intros = {
+    card: '<b>資料</b>＝腳本讀取，名稱與鍵名必須維持簡體。<b>提示詞</b>＝AI 讀取，全部轉成繁體。可調整分類、狀態與內容；停用條目仍會轉換。',
+    worldbook: '獨立世界書的每個條目都會顯示並接受轉換；可編輯名稱、正文、關鍵詞與啟用狀態，未知欄位及原始順序會保留。',
+    preset: '依 Prompt Manager 的實際順序顯示全部提示詞；可編輯內容與啟用狀態。內嵌 Regex Scripts 會列在同一工作台下方。',
+    regex: '每條正則都可展開檢查及編輯。繁簡轉換會處理名稱、搜尋式、替換內容與 trimStrings，同時保留其他設定。',
+  };
+  $('#workIntro').innerHTML = intros[S.kind] || intros.card;
+  $('#entrySearch').placeholder = S.kind === 'preset' ? '搜尋 Prompt 名稱、identifier、正文或正則'
+    : S.kind === 'regex' ? '搜尋正則名稱、搜尋式或替換內容' : '搜尋條目名稱、關鍵詞或正文';
+  const book = S.kind === 'card' || S.kind === 'worldbook';
+  $('#entryFilters').querySelectorAll('.book-filter').forEach(button => button.classList.toggle('hidden', !book));
+  $('#ambiguities').classList.toggle('hidden', !book || !(S.ambiguities || []).length);
+  $('#presetOrderTools').classList.toggle('hidden', S.kind !== 'preset');
+  renderPresetOrderTools();
+  updateFilterButtons();
+}
+
+function renderPresetOrderTools() {
+  if (S.kind !== 'preset') return;
+  const p = displayedPreset();
+  const groups = presetOrderGroups(p);
+  const select = $('#presetOrderGroup');
+  select.innerHTML = groups.length
+    ? groups.map((group, i) => `<option value="${i}">${esc(group.name || `群組 ${i + 1}`)}${group.character_id !== undefined ? `・character_id ${esc(group.character_id)}` : ''}（${group.order.length} 項）</option>`).join('')
+    : '<option value="0">尚未設定 prompt_order</option>';
+  select.value = String(Math.min(S.presetOrderIndex, Math.max(0, groups.length - 1)));
+  select.disabled = groups.length < 2;
+  $('#presetOrderNote').textContent = groups.length
+    ? (groups.length > 1 ? '切換群組只影響目前檢視與狀態修改。' : '啟用狀態來自這個順序群組。')
+    : '目前依 prompts 原始順序顯示；第一次切換狀態時才建立順序設定。';
 }
 
 /* ---------- 條目分類 ---------- */
@@ -2146,6 +2285,12 @@ function entryDetail(e, i) {
 }
 
 function renderEntries() {
+  if (S.kind === 'preset') return renderPresetEntries();
+  if (S.kind === 'regex') return renderRegexEntries();
+  return renderBookEntries();
+}
+
+function renderBookEntries() {
   const es = displayedEntriesOf();
   const showingOutput = isOutputView();
   $('#enttools').classList.toggle('hidden', !es.length);
@@ -2222,6 +2367,322 @@ function renderEntries() {
   $('#entries').querySelectorAll('.entry-edit textarea').forEach(autoGrowTextarea);
 }
 
+function presetBaseline() { return isOutputView() ? S.outputSnapshot : originalPreset(); }
+function regexBaseline() { return isOutputView() ? outputSnapshotRegex() : originalRegex(); }
+function presetPromptChangedAt(i) {
+  const current = presetPrompts(displayedPreset())[i], original = presetPrompts(presetBaseline())[i];
+  return !!current && !!original && JSON.stringify(current) !== JSON.stringify(original);
+}
+function presetPromptStatusChangedAt(i) {
+  const currentDoc = displayedPreset(), originalDoc = presetBaseline();
+  const current = presetPrompts(currentDoc)[i], original = presetPrompts(originalDoc)[i];
+  if (!current || !original) return false;
+  return presetPromptEnabled(currentDoc, current) !== presetPromptEnabled(originalDoc, original)
+    || !!presetPromptOrderEntry(currentDoc, current) !== !!presetPromptOrderEntry(originalDoc, original);
+}
+function standaloneRegexChangedAt(i) {
+  const current = displayedRegex()[i], original = regexBaseline()[i];
+  if (!current || !original) return false;
+  const a = cloneData(current), b = cloneData(original); delete a.disabled; delete b.disabled;
+  return JSON.stringify(a) !== JSON.stringify(b);
+}
+function standaloneRegexStatusChangedAt(i) {
+  const current = displayedRegex()[i], original = regexBaseline()[i];
+  return !!current && !!original && !!current.disabled !== !!original.disabled;
+}
+function embeddedRegexChangedAt(collectionKey, i) {
+  const current = presetRegexRecordAt(displayedPreset(), collectionKey, i);
+  const original = presetRegexRecordAt(presetBaseline(), collectionKey, i);
+  if (!current || !original) return false;
+  const a = cloneData(current), b = cloneData(original); delete a.disabled; delete b.disabled;
+  return JSON.stringify(a) !== JSON.stringify(b);
+}
+function embeddedRegexStatusChangedAt(collectionKey, i) {
+  const current = presetRegexRecordAt(displayedPreset(), collectionKey, i);
+  const original = presetRegexRecordAt(presetBaseline(), collectionKey, i);
+  return !!current && !!original && !!current.disabled !== !!original.disabled;
+}
+
+function promptEditor(prompt, i) {
+  return `<form class="entry-edit prompt-edit" data-editor-type="prompt" data-edit-index="${i}">
+    <div class="edit-grid">
+      <label class="edit-field">Prompt 名稱<input name="name" value="${esc(prompt.name ?? '')}"></label>
+      <label class="edit-field">Prompt 正文<textarea name="content">${esc(prompt.content == null ? '' : String(prompt.content))}</textarea></label>
+      <details class="advanced"><summary>進階：角色與插入位置</summary><div class="edit-grid advanced-grid">
+        <label class="edit-field">Role<input name="role" value="${esc(prompt.role ?? '')}" placeholder="system / user / assistant"></label>
+        <label class="edit-field">Injection position<input name="injection_position" type="number" value="${esc(prompt.injection_position ?? '')}"></label>
+        <label class="edit-field">Injection depth<input name="injection_depth" type="number" value="${esc(prompt.injection_depth ?? '')}"></label>
+        <label class="edit-field">Injection order<input name="injection_order" type="number" value="${esc(prompt.injection_order ?? '')}"></label>
+      </div></details>
+    </div>
+    <div class="edit-actions"><button class="minor" type="submit">儲存</button>
+      <button class="minor" type="button" data-work-action="cancel" data-item-type="prompt" data-i="${i}">取消</button>
+      <button class="minor danger" type="button" data-work-action="restore" data-item-type="prompt" data-i="${i}">還原此 Prompt</button></div>
+  </form>`;
+}
+
+function promptDetail(prompt, i, listed) {
+  const key = `p:${i}`;
+  if (S.editing === key) return promptEditor(prompt, i);
+  const content = String(prompt.content ?? '');
+  return `${isOutputView() ? '<div class="result-note">這是轉換後的 Prompt；可繼續編輯，匯出時會保留修改。</div>' : ''}
+    <div class="entd-row"><span class="entd-lab">Identifier</span><span class="entd-val"><code class="chip">${esc(prompt.identifier || '（無）')}</code></span></div>
+    <div class="entd-row"><span class="entd-lab">屬性</span><span class="entd-val"><span class="entd-meta">${esc([prompt.role || 'system', prompt.marker ? 'Marker' : '一般 Prompt', listed ? '已加入目前順序' : '未加入目前順序'].join('・'))}</span></span></div>
+    <div class="entd-row"><span class="entd-lab">內容</span><span class="entd-val"><span class="entd-meta">${content.length} 字元・${content ? content.split('\n').length : 0} 行</span></span></div>
+    <pre class="entd-body">${content ? esc(content) : '（空白／由 SillyTavern 動態填入）'}</pre>
+    <div class="edit-actions"><button class="minor" type="button" data-work-action="edit" data-item-type="prompt" data-i="${i}">編輯</button>
+      ${(presetPromptChangedAt(i) || presetPromptStatusChangedAt(i)) ? `<button class="minor danger" type="button" data-work-action="restore" data-item-type="prompt" data-i="${i}">還原此 Prompt</button>` : ''}</div>`;
+}
+
+function regexEditor(script, record, embedded) {
+  const type = embedded ? 'embedded-regex' : 'regex';
+  return `<form class="entry-edit regex-edit" data-editor-type="${type}" data-edit-index="${record.index}" data-collection="${esc(record.collectionKey || '')}">
+    <div class="data-risk"><b>正則腳本：</b>修改搜尋式可能讓規則失效；儲存後會立即重新驗證語法。</div>
+    <div class="edit-grid">
+      <label class="edit-field">腳本名稱<input name="scriptName" value="${esc(script.scriptName ?? '')}"></label>
+      <label class="edit-field">搜尋式 findRegex<textarea class="regex-editor" name="findRegex">${esc(script.findRegex ?? '')}</textarea></label>
+      <label class="edit-field">替換內容 replaceString<textarea name="replaceString">${esc(script.replaceString ?? '')}</textarea></label>
+      <details class="advanced"><summary>進階：trimStrings（每行一項）</summary><label class="edit-field"><textarea class="keys-editor" name="trimStrings">${esc(Array.isArray(script.trimStrings) ? script.trimStrings.join('\n') : '')}</textarea></label></details>
+    </div>
+    <div class="edit-actions"><button class="minor" type="submit">儲存</button>
+      <button class="minor" type="button" data-work-action="cancel" data-item-type="${type}" data-collection="${esc(record.collectionKey || '')}" data-i="${record.index}">取消</button>
+      <button class="minor danger" type="button" data-work-action="restore" data-item-type="${type}" data-collection="${esc(record.collectionKey || '')}" data-i="${record.index}">還原此正則</button></div>
+  </form>`;
+}
+
+function regexDetail(script, record, embedded) {
+  const type = embedded ? 'embedded-regex' : 'regex';
+  const key = `r:${record.collectionKey || 'standalone'}:${record.index}`;
+  if (S.editing === key) return regexEditor(script, record, embedded);
+  const changed = embedded ? embeddedRegexChangedAt(record.collectionKey, record.index) || embeddedRegexStatusChangedAt(record.collectionKey, record.index)
+    : standaloneRegexChangedAt(record.index) || standaloneRegexStatusChangedAt(record.index);
+  return `${isOutputView() ? '<div class="result-note">這是轉換後的正則；可繼續編輯，匯出時會保留修改。</div>' : ''}
+    <div class="entd-row"><span class="entd-lab">搜尋式</span><span class="entd-val"><span class="entd-meta">${String(script.findRegex || '').length} 字元</span></span></div>
+    <pre class="entd-body compact-code">${esc(script.findRegex || '（空白）')}</pre>
+    <div class="entd-row"><span class="entd-lab">替換</span><span class="entd-val"><span class="entd-meta">${String(script.replaceString || '').length} 字元</span></span></div>
+    <pre class="entd-body compact-code">${esc(script.replaceString || '（空白）')}</pre>
+    <div class="edit-actions"><button class="minor" type="button" data-work-action="edit" data-item-type="${type}" data-collection="${esc(record.collectionKey || '')}" data-i="${record.index}">編輯</button>
+      ${changed ? `<button class="minor danger" type="button" data-work-action="restore" data-item-type="${type}" data-collection="${esc(record.collectionKey || '')}" data-i="${record.index}">還原此正則</button>` : ''}</div>`;
+}
+
+function renderRegexRow(record, embedded) {
+  const script = record.script, enabled = !script.disabled;
+  const key = `r:${record.collectionKey || 'standalone'}:${record.index}`;
+  const open = S.open.has(key);
+  const changed = embedded ? embeddedRegexChangedAt(record.collectionKey, record.index) || embeddedRegexStatusChangedAt(record.collectionKey, record.index)
+    : standaloneRegexChangedAt(record.index) || standaloneRegexStatusChangedAt(record.index);
+  let invalid = false;
+  if (script.findRegex) {
+    const m = String(script.findRegex).match(/^\/(.*)\/([a-z]*)$/s);
+    try { new RegExp(m ? m[1] : script.findRegex, m ? m[2] : ''); } catch (_) { invalid = true; }
+  }
+  return `<div class="ent-wrap ${enabled ? '' : 'is-off'}"><div class="ent">
+    <button type="button" class="tw" data-work-toggle="${esc(key)}" aria-expanded="${open}"><span class="caret">▶</span><span class="nm">${esc(script.scriptName || `正則 ${record.index + 1}`)}</span></button>
+    <span class="ent-headbadges"><span class="mini-badge regex-badge">正則</span>${invalid ? '<span class="mini-badge hot">語法錯誤</span>' : ''}${changed ? '<span class="mini-badge changed">已修改</span>' : ''}</span>
+    <label class="switch" title="停用正則仍會接受轉換"><input type="checkbox" data-regex-enabled="${record.index}" data-collection="${esc(record.collectionKey || '')}" ${enabled ? 'checked' : ''}><span class="switch-track"></span><span>${enabled ? '啟用' : '停用'}</span></label>
+    <span class="why">${esc(record.collectionKey || '獨立檔案')}</span></div>
+    <div class="entd" ${open ? '' : 'hidden'}>${open ? regexDetail(script, record, embedded) : ''}</div></div>`;
+}
+
+function renderPresetEntries() {
+  const p = displayedPreset();
+  const prompts = orderedPresetPromptRows(p);
+  const regexes = presetRegexRecords(p);
+  const f = S.filters, q = f.search.toLocaleLowerCase();
+  const visiblePrompts = prompts.filter(({ prompt, index }) => {
+    const enabled = presetPromptEnabled(p, prompt), changed = presetPromptChangedAt(index) || presetPromptStatusChangedAt(index);
+    const haystack = [prompt.name, prompt.identifier, prompt.role, prompt.content].join('\n').toLocaleLowerCase();
+    return (!q || haystack.includes(q)) && (f.status === 'all' || (f.status === 'enabled') === enabled) && (!f.modified || changed);
+  });
+  const visibleRegex = regexes.filter(record => {
+    const enabled = !record.script.disabled;
+    const changed = embeddedRegexChangedAt(record.collectionKey, record.index) || embeddedRegexStatusChangedAt(record.collectionKey, record.index);
+    const haystack = [record.script.scriptName, record.script.findRegex, record.script.replaceString].join('\n').toLocaleLowerCase();
+    return (!q || haystack.includes(q)) && (f.status === 'all' || (f.status === 'enabled') === enabled) && (!f.modified || changed);
+  });
+  $('#enttools').classList.toggle('hidden', !prompts.length && !regexes.length);
+  let html = `<div class="work-group-title"><span>Prompts</span><b>${visiblePrompts.length}/${prompts.length}</b></div>`;
+  html += visiblePrompts.map(({ prompt, index, listed }) => {
+    const key = `p:${index}`, open = S.open.has(key), enabled = presetPromptEnabled(p, prompt);
+    const changed = presetPromptChangedAt(index) || presetPromptStatusChangedAt(index);
+    return `<div class="ent-wrap ${enabled ? '' : 'is-off'}"><div class="ent">
+      <button type="button" class="tw" data-work-toggle="${key}" aria-expanded="${open}"><span class="caret">▶</span><span class="nm">${esc(prompt.name || prompt.identifier || `Prompt ${index + 1}`)}</span></button>
+      <span class="ent-headbadges"><span class="mini-badge">${prompt.marker ? 'Marker' : esc(prompt.role || 'system')}</span>${!listed ? '<span class="mini-badge hot">未加入順序</span>' : ''}${changed ? '<span class="mini-badge changed">已修改</span>' : ''}</span>
+      <label class="switch" title="${listed ? '切換目前順序群組中的狀態' : '開啟時會加入目前順序群組'}"><input type="checkbox" data-prompt-enabled="${index}" ${enabled ? 'checked' : ''}><span class="switch-track"></span><span>${enabled ? '啟用' : '停用'}</span></label>
+      <span class="why mono">${esc(prompt.identifier || '無 identifier')}</span></div>
+      <div class="entd" ${open ? '' : 'hidden'}>${open ? promptDetail(prompt, index, listed) : ''}</div></div>`;
+  }).join('');
+  html += `<div class="work-group-title"><span>Regex Scripts</span><b>${visibleRegex.length}/${regexes.length}</b></div>`;
+  html += visibleRegex.length ? visibleRegex.map(record => renderRegexRow(record, true)).join('') : '<div class="empty-group">這份預設沒有符合目前條件的內嵌正則。</div>';
+  if (!visiblePrompts.length && !visibleRegex.length) html = '<div class="empty-group">沒有符合目前搜尋與篩選條件的項目。</div>';
+  $('#entries').innerHTML = html;
+  renderPresetOrderTools(); bindSpecialEntryEvents();
+}
+
+function renderRegexEntries() {
+  const f = S.filters, q = f.search.toLocaleLowerCase();
+  const records = displayedRegex().map((script, index) => ({ script, index, collectionKey: '' }));
+  const visible = records.filter(record => {
+    const enabled = !record.script.disabled, changed = standaloneRegexChangedAt(record.index) || standaloneRegexStatusChangedAt(record.index);
+    const haystack = [record.script.scriptName, record.script.findRegex, record.script.replaceString].join('\n').toLocaleLowerCase();
+    return (!q || haystack.includes(q)) && (f.status === 'all' || (f.status === 'enabled') === enabled) && (!f.modified || changed);
+  });
+  $('#enttools').classList.toggle('hidden', !records.length);
+  $('#entries').innerHTML = visible.length
+    ? `<div class="work-group-title"><span>Regex Scripts</span><b>${visible.length}/${records.length}</b></div>` + visible.map(record => renderRegexRow(record, false)).join('')
+    : '<div class="empty-group">沒有符合目前搜尋與篩選條件的正則。</div>';
+  bindSpecialEntryEvents();
+}
+
+function bindSpecialEntryEvents() {
+  $('#entries').querySelectorAll('[data-work-toggle]').forEach(button => button.addEventListener('click', () => {
+    const key = button.dataset.workToggle;
+    if (S.open.has(key)) S.open.delete(key); else S.open.add(key);
+    renderEntries();
+  }));
+  $('#entries').querySelectorAll('[data-work-action]').forEach(button => button.addEventListener('click', () => {
+    const type = button.dataset.itemType, i = +button.dataset.i, collection = button.dataset.collection || '';
+    const key = type === 'prompt' ? `p:${i}` : `r:${collection || 'standalone'}:${i}`;
+    if (button.dataset.workAction === 'edit') { S.editing = key; S.open.add(key); renderEntries(); }
+    if (button.dataset.workAction === 'cancel') { S.editing = null; renderEntries(); }
+    if (button.dataset.workAction === 'restore') restoreSpecialItem(type, i, collection);
+  }));
+  $('#entries').querySelectorAll('input[data-prompt-enabled]').forEach(input => input.addEventListener('change', () => setPresetPromptEnabled(+input.dataset.promptEnabled, input.checked)));
+  $('#entries').querySelectorAll('input[data-regex-enabled]').forEach(input => input.addEventListener('change', () => setRegexEnabled(+input.dataset.regexEnabled, input.dataset.collection || '', input.checked)));
+  $('#entries').querySelectorAll('form[data-editor-type]').forEach(form => form.addEventListener('submit', event => {
+    event.preventDefault();
+    if (form.dataset.editorType === 'prompt') savePresetPrompt(+form.dataset.editIndex, form);
+    else saveRegexScript(+form.dataset.editIndex, form.dataset.collection || '', form);
+  }));
+  $('#entries').querySelectorAll('.entry-edit textarea').forEach(autoGrowTextarea);
+}
+
+function finishSpecialMutation() {
+  S.editing = null;
+  if (isOutputView()) { refreshOutputAfterEdit(); return; }
+  invalidateOutput();
+  renderCurrentMeta(); renderEntries(); renderWorkbenchStatus(); renderReport(); renderFixes(); renderAudit(); renderApplySummary();
+}
+
+function savePresetPrompt(i, form) {
+  commitPresetPrompt(i, {
+    name: form.elements.name.value,
+    content: form.elements.content.value,
+    role: form.elements.role.value,
+    injection_position: form.elements.injection_position.value,
+    injection_depth: form.elements.injection_depth.value,
+    injection_order: form.elements.injection_order.value,
+  });
+}
+
+function commitPresetPrompt(i, values) {
+  const prompt = presetPrompts(displayedPreset())[i];
+  if (!prompt) return;
+  if (values.name !== undefined) prompt.name = values.name;
+  const normalized = String(prompt.content ?? '').replace(/\r\n?/g, '\n');
+  if (values.content !== undefined && values.content !== normalized) prompt.content = values.content;
+  if (values.role !== undefined) prompt.role = values.role;
+  for (const field of ['injection_position', 'injection_depth', 'injection_order']) {
+    if (values[field] === undefined) continue;
+    const value = values[field];
+    if (value === '') { if (owns(prompt, field)) delete prompt[field]; }
+    else prompt[field] = Number(value);
+  }
+  finishSpecialMutation();
+}
+
+function ensurePresetOrder(p) {
+  let group = selectedPresetOrder(p);
+  if (group) return group;
+  const prompts = presetPrompts(p);
+  p.prompt_order = [{ character_id: 100000, order: prompts.map(prompt => ({ identifier: prompt.identifier, enabled: prompt.enabled !== false })) }];
+  S.presetOrderIndex = 0;
+  return p.prompt_order[0];
+}
+
+function setPresetPromptEnabled(i, enabled) {
+  const p = displayedPreset(), prompt = presetPrompts(p)[i];
+  if (!prompt) return;
+  const group = ensurePresetOrder(p);
+  let order = group.order.find(item => item.identifier === prompt.identifier);
+  if (!order) { order = { identifier: prompt.identifier, enabled }; group.order.push(order); }
+  else order.enabled = enabled;
+  finishSpecialMutation();
+}
+
+function targetRegexScript(i, collectionKey = '') {
+  return S.kind === 'preset' ? presetRegexRecordAt(displayedPreset(), collectionKey, i) : displayedRegex()[i];
+}
+
+function setRegexEnabled(i, collectionKey, enabled) {
+  const script = targetRegexScript(i, collectionKey);
+  if (!script) return;
+  script.disabled = !enabled;
+  finishSpecialMutation();
+}
+
+function saveRegexScript(i, collectionKey, form) {
+  commitRegexScript(i, collectionKey, {
+    scriptName: form.elements.scriptName.value,
+    findRegex: form.elements.findRegex.value,
+    replaceString: form.elements.replaceString.value,
+    trimStrings: form.elements.trimStrings.value,
+  });
+}
+
+function commitRegexScript(i, collectionKey, values) {
+  const script = targetRegexScript(i, collectionKey);
+  if (!script) return;
+  if (values.scriptName !== undefined) script.scriptName = values.scriptName;
+  for (const field of ['findRegex', 'replaceString']) {
+    const normalized = String(script[field] ?? '').replace(/\r\n?/g, '\n');
+    if (values[field] !== undefined && values[field] !== normalized) script[field] = values[field];
+  }
+  if (values.trimStrings !== undefined) {
+    const trimValue = values.trimStrings.replace(/\r\n?/g, '\n');
+    const originalTrim = Array.isArray(script.trimStrings) ? script.trimStrings.join('\n') : '';
+    if (trimValue !== originalTrim) script.trimStrings = trimValue === '' ? [] : trimValue.split('\n');
+  }
+  finishSpecialMutation();
+}
+
+function restorePromptStatus(currentDoc, baselineDoc, i) {
+  const currentPrompt = presetPrompts(currentDoc)[i], baselinePrompt = presetPrompts(baselineDoc)[i];
+  if (!currentPrompt || !baselinePrompt) return;
+  const currentGroup = selectedPresetOrder(currentDoc), baselineGroup = selectedPresetOrder(baselineDoc);
+  if (!currentGroup) return;
+  const currentIndex = currentGroup.order.findIndex(item => item.identifier === currentPrompt.identifier);
+  const baselineEntry = baselineGroup?.order.find(item => item.identifier === baselinePrompt.identifier);
+  if (baselineEntry) {
+    if (currentIndex >= 0) currentGroup.order[currentIndex] = cloneData(baselineEntry);
+    else currentGroup.order.push(cloneData(baselineEntry));
+  } else if (currentIndex >= 0) currentGroup.order.splice(currentIndex, 1);
+}
+
+function restoreSpecialItem(type, i, collectionKey) {
+  if (type === 'prompt') {
+    const currentDoc = displayedPreset(), baselineDoc = presetBaseline();
+    const baseline = presetPrompts(baselineDoc)[i];
+    if (!baseline) return;
+    restorePromptStatus(currentDoc, baselineDoc, i);
+    presetPrompts(currentDoc).splice(i, 1, cloneData(baseline));
+  } else if (type === 'embedded-regex') {
+    const current = presetRegexRecordAt(displayedPreset(), collectionKey, i);
+    const baseline = presetRegexRecordAt(presetBaseline(), collectionKey, i);
+    const collection = presetRegexCollections(displayedPreset()).find(x => x.key === collectionKey);
+    if (!current || !baseline || !collection) return;
+    collection.list.splice(i, 1, cloneData(baseline));
+  } else {
+    const baseline = regexBaseline()[i];
+    if (!baseline) return;
+    displayedRegex().splice(i, 1, cloneData(baseline));
+  }
+  S.editing = null;
+  if (isOutputView()) refreshOutputAfterEdit(); else {
+    invalidateOutput(); renderCurrentMeta(); renderEntries(); renderWorkbenchStatus(); renderReport(); renderAudit(); renderApplySummary();
+  }
+}
+
 function autoGrowTextarea(textarea) {
   const grow = () => { textarea.style.height = 'auto'; textarea.style.height = Math.min(textarea.scrollHeight + 2, window.innerHeight * .7) + 'px'; };
   textarea.addEventListener('input', grow); grow();
@@ -2283,10 +2744,15 @@ function setDisplayedEntryEnabled(i, enabled) {
 
 function refreshOutputAfterEdit() {
   if (!S.out) return;
-  const after = validate(S.out, kindOf).issues;
+  const after = S.kind === 'preset' ? validatePreset(S.out).issues
+    : S.kind === 'regex' ? validateRegexFile(S.out).issues : validate(S.out, kindOf).issues;
   renderReportAfter(after);
-  renderMeta(); renderEntries(); renderWorkbenchStatus(); renderApplySummary(); renderAudit();
-  const changed = entriesOf(S.out).filter((_, i) => outputEntryContentChangedAt(i) || outputEntryStatusChangedAt(i)).length;
+  renderCurrentMeta(); renderEntries(); renderWorkbenchStatus(); renderApplySummary(); renderAudit();
+  const changed = S.kind === 'preset'
+    ? presetPrompts(S.out).filter((_, i) => presetPromptChangedAt(i) || presetPromptStatusChangedAt(i)).length
+      + presetRegexRecords(S.out).filter(r => embeddedRegexChangedAt(r.collectionKey, r.index) || embeddedRegexStatusChangedAt(r.collectionKey, r.index)).length
+    : S.kind === 'regex' ? S.out.filter((_, i) => standaloneRegexChangedAt(i) || standaloneRegexStatusChangedAt(i)).length
+    : entriesOf(S.out).filter((_, i) => outputEntryContentChangedAt(i) || outputEntryStatusChangedAt(i)).length;
   $('#runState').textContent = `轉換完成；已另外手動調整 ${changed} 個結果條目。`;
   $('#runState').classList.add('done');
   if (S.lastRun) {
@@ -2325,22 +2791,41 @@ function restoreAllEntries() {
     refreshOutputAfterEdit();
     return;
   }
-  if (!confirm('要還原全部條目文字、關鍵詞、啟用狀態與疑義詞決定嗎？')) return;
-  if (S.kind === 'worldbook') {
+  const restoreMessage = S.kind === 'preset'
+    ? '要還原全部 Prompt、內嵌正則與啟用狀態修改嗎？'
+    : S.kind === 'regex'
+      ? '要還原全部正則內容與啟用狀態修改嗎？'
+      : '要還原全部條目文字、關鍵詞、啟用狀態與疑義詞決定嗎？';
+  if (!confirm(restoreMessage)) return;
+  if (S.kind === 'preset') {
+    S.preset = cloneData(S.originalSource);
+    S.presetOrderIndex = bestPresetOrderIndex(S.preset);
+  } else if (S.kind === 'regex') {
+    const normalized = normalizeRegexFile(cloneData(S.originalSource));
+    S.rx = normalized.list; S.rxSingle = normalized.single;
+  } else if (S.kind === 'worldbook') {
     S.wb = cloneData(S.originalSource);
     const wrapped = wrapWorldbook(S.wb);
     S.card = wrapped.pseudo; S.uids = wrapped.uids;
   } else S.card = cloneData(S.originalCard);
-  S.kinds = entriesOf().map(e => classifyEntry(e).kind);
-  S.statusFields = entriesOf().map((e, i) => detectEntryEnabledField(originalEntriesOf()[i] || e, S.kind));
+  if (S.card) {
+    S.kinds = entriesOf().map(e => classifyEntry(e).kind);
+    S.statusFields = entriesOf().map((e, i) => detectEntryEnabledField(originalEntriesOf()[i] || e, S.kind));
+  }
   S.decisions = new Map(); S.editing = null; invalidateOutput(); refreshAmbiguities();
-  renderMeta(); renderEntries(); renderAmbiguities(); renderWorkbenchStatus();
+  renderCurrentMeta(); renderEntries(); renderAmbiguities(); renderWorkbenchStatus(); renderPresetOrderTools();
   renderReport(); renderFixes(); renderAudit(); renderApplySummary();
 }
 
 function bindEntryTools() {
   $('#expandAll').addEventListener('click', () => {
-    S.open = new Set(entriesOf().map((_, i) => i));
+    if (S.kind === 'preset') {
+      S.open = new Set([
+        ...presetPrompts(displayedPreset()).map((_, i) => `p:${i}`),
+        ...presetRegexRecords(displayedPreset()).map(r => `r:${r.collectionKey}:${r.index}`),
+      ]);
+    } else if (S.kind === 'regex') S.open = new Set(displayedRegex().map((_, i) => `r:standalone:${i}`));
+    else S.open = new Set(entriesOf().map((_, i) => i));
     renderEntries();
   });
   $('#collapseAll').addEventListener('click', () => {
@@ -2352,7 +2837,7 @@ function bindEntryTools() {
     if (button.dataset.view === 'output' && !S.out) return;
     S.viewMode = button.dataset.view;
     S.editing = null;
-    updateViewSwitch(); renderMeta(); renderEntries(); renderWorkbenchStatus(); renderApplySummary();
+    updateViewSwitch(); renderCurrentMeta(); renderEntries(); renderWorkbenchStatus(); renderApplySummary(); renderPresetOrderTools();
   }));
   $('#entrySearch').addEventListener('input', e => { S.filters.search = e.target.value; renderEntries(); });
   $('#entryFilters').querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
@@ -2364,6 +2849,11 @@ function bindEntryTools() {
     else S.filters[type] = !S.filters[type];
     updateFilterButtons(); renderEntries();
   }));
+  $('#presetOrderGroup').addEventListener('change', event => {
+    S.presetOrderIndex = +event.target.value || 0;
+    S.open = new Set(); S.editing = null;
+    renderEntries(); renderWorkbenchStatus(); renderMetaPreset();
+  });
 }
 
 function updateViewSwitch() {
@@ -2386,19 +2876,34 @@ function updateFilterButtons() {
 
 function renderWorkbenchStatus() {
   const outputMode = isOutputView();
-  const es = displayedEntriesOf();
-  const modified = es.filter((_, i) => displayedEntryContentChangedAt(i)).length;
-  const toggled = es.filter((_, i) => displayedEntryStatusChangedAt(i)).length;
+  let total = 0, modified = 0, toggled = 0, label = '條目';
+  if (S.kind === 'preset') {
+    const prompts = presetPrompts(displayedPreset()), regexes = presetRegexRecords(displayedPreset());
+    total = prompts.length + regexes.length; label = '項目';
+    modified = prompts.filter((_, i) => presetPromptChangedAt(i)).length
+      + regexes.filter(r => embeddedRegexChangedAt(r.collectionKey, r.index)).length;
+    toggled = prompts.filter((_, i) => presetPromptStatusChangedAt(i)).length
+      + regexes.filter(r => embeddedRegexStatusChangedAt(r.collectionKey, r.index)).length;
+  } else if (S.kind === 'regex') {
+    const regexes = displayedRegex(); total = regexes.length; label = '正則';
+    modified = regexes.filter((_, i) => standaloneRegexChangedAt(i)).length;
+    toggled = regexes.filter((_, i) => standaloneRegexStatusChangedAt(i)).length;
+  } else {
+    const es = displayedEntriesOf(); total = es.length;
+    modified = es.filter((_, i) => displayedEntryContentChangedAt(i)).length;
+    toggled = es.filter((_, i) => displayedEntryStatusChangedAt(i)).length;
+  }
   const unresolved = unresolvedAmbiguities().length;
   $('#workStatus').innerHTML = [
     `<b>${outputMode ? '轉換結果（可編輯）' : '編輯中'}</b>`,
-    `${outputMode ? '結果已修改' : '已修改'} <b>${modified}</b> 個條目`,
-    `${outputMode ? '結果已切換' : '已切換'} <b>${toggled}</b> 個條目`,
-    `尚有 <b>${unresolved}</b> 個疑義詞`,
+    `共 <b>${total}</b> 個${label}`,
+    `${outputMode ? '結果已修改' : '已修改'} <b>${modified}</b>`,
+    `${outputMode ? '結果已切換' : '已切換'} <b>${toggled}</b>`,
+    ...(S.card ? [`尚有 <b>${unresolved}</b> 個疑義詞`] : []),
   ].map(x => `<span>${x}</span>`).join('');
   const badge = $('#confirmBadge');
   badge.textContent = `需要確認 ${unresolved}`;
-  badge.classList.toggle('hidden', !unresolved);
+  badge.classList.toggle('hidden', !S.card || !unresolved);
 }
 
 function setAmbiguityDecision(id, decision) {
@@ -2528,8 +3033,26 @@ function outputManualChangeRows() {
 
 function renderApplySummary() {
   const box = $('#applySummary');
-  if (!S.card) {
-    box.innerHTML = `<div class="tt">最終修改摘要</div><div class="summary-grid"><span>自動繁簡轉換 <b>${S.lastRun?.changedCount ?? '待套用'}</b></span></div>`;
+  if (S.kind === 'preset') {
+    const prompts = presetPrompts(displayedPreset()), regexes = presetRegexRecords(displayedPreset());
+    const promptContent = prompts.filter((_, i) => presetPromptChangedAt(i)).length;
+    const promptStatus = prompts.filter((_, i) => presetPromptStatusChangedAt(i)).length;
+    const regexContent = regexes.filter(r => embeddedRegexChangedAt(r.collectionKey, r.index)).length;
+    const regexStatus = regexes.filter(r => embeddedRegexStatusChangedAt(r.collectionKey, r.index)).length;
+    box.innerHTML = `<div class="tt">最終修改摘要</div><div class="summary-grid">
+      <span>Prompt 內容修改 <b>${promptContent}</b></span><span>Prompt 狀態修改 <b>${promptStatus}</b></span>
+      <span>正則內容修改 <b>${regexContent}</b></span><span>正則狀態修改 <b>${regexStatus}</b></span>
+      <span>自動繁簡轉換 <b>${S.lastRun?.changedCount ?? '待套用'}</b></span>
+      <span>內嵌正則 <b>${$('#doRegex').checked ? `同步 ${regexes.length} 條` : '不轉換'}</b></span></div>`;
+    return;
+  }
+  if (S.kind === 'regex') {
+    const regexes = displayedRegex();
+    const content = regexes.filter((_, i) => standaloneRegexChangedAt(i)).length;
+    const status = regexes.filter((_, i) => standaloneRegexStatusChangedAt(i)).length;
+    box.innerHTML = `<div class="tt">最終修改摘要</div><div class="summary-grid">
+      <span>正則內容修改 <b>${content}</b></span><span>正則狀態修改 <b>${status}</b></span>
+      <span>自動繁簡轉換 <b>${S.lastRun?.changedCount ?? '待套用'}</b></span></div>`;
     return;
   }
   const es = entriesOf();
@@ -2568,10 +3091,10 @@ function diffPairs(detail) {
 
 function renderReport() {
   const { issues } = S.kind === 'preset'
-    ? validatePreset(S.out || S.preset)
+    ? validatePreset(displayedPreset())
     : S.kind === 'regex'
-    ? validateRegexFile(S.out || S.rx || [])
-    : validate(S.out || S.card, kindOf);
+    ? validateRegexFile(displayedRegex())
+    : validate(isOutputView() && S.out ? S.out : S.card, kindOf);
   S.issues = issues;
   const nE = issues.filter(i => i.level === 'error').length;
   const nW = issues.filter(i => i.level === 'warn').length;
@@ -2602,10 +3125,10 @@ function renderReport() {
 /* ---------- 風險稽核 ---------- */
 function renderAudit() {
   // 正則檔包成稽核看得懂的形狀，就能沿用既有的 replaceString 掃描
-  const doc = S.kind === 'preset' ? (S.out || S.preset)
-            : S.kind === 'regex' ? { extensions: { regex_scripts: S.out || S.rx || [] } }
-            : S.kind === 'worldbook' ? (S.wb ? (S.out ? unwrapWorldbook(S.wb, S.out, S.uids) : S.wb) : null)
-            : (S.out || S.card);
+  const doc = S.kind === 'preset' ? displayedPreset()
+            : S.kind === 'regex' ? { extensions: { regex_scripts: displayedRegex() } }
+            : S.kind === 'worldbook' ? (S.wb ? (isOutputView() && S.out ? unwrapWorldbook(S.wb, S.out, S.uids) : S.wb) : null)
+            : (isOutputView() && S.out ? S.out : S.card);
   if (!doc) return;
   const r = auditDoc(doc, S.kind);
   S.audit = r;
@@ -2774,6 +3297,7 @@ async function run() {
         changedCount = r2.changed.length;
         say(`${what}：${r2.changed.length} 處文字有變動`);
         say(`已保護 ${(doc.prompts || []).length} 個提示詞識別碼與整份順序清單不被轉換`);
+        if ($('#doRegex').checked) say(`已同步處理 ${presetRegexScripts(doc).length} 條內嵌正則`);
       } else {
         const ambiguityStash = protectEntryAmbiguities(doc, S.decisions, safeConvert);
         const r2 = convertCard(doc, { convert, doRegex: $('#doRegex').checked, kindOf });
@@ -2796,7 +3320,7 @@ async function run() {
     S.out = doc;
     S.outputSnapshot = cloneData(doc);
     S.lastRun = { changedCount, ambiguityDecisions: S.decisions.size, unresolved, done: [...r1.done], dirId: dir.id };
-    if (!isRegex && !isPreset) S.viewMode = 'output';
+    S.viewMode = 'output';
     const after = isRegex ? validateRegexFile(doc).issues
                 : isPreset ? validatePreset(doc).issues
                 : validate(doc, kindOf).issues;
@@ -2809,13 +3333,13 @@ async function run() {
     $('#runState').classList.add('done');
     updateViewSwitch();
     renderReportAfter(after);
-    if (isRegex) renderMetaRegex();
-    else if (isPreset) renderMetaPreset();
+    if (isRegex) { renderMetaRegex(); renderEntries(); renderWorkbenchStatus(); }
+    else if (isPreset) { renderMetaPreset(); renderEntries(); renderWorkbenchStatus(); renderPresetOrderTools(); }
     else { renderMeta(); renderEntries(); renderAmbiguities(); renderWorkbenchStatus(); }
     renderApplySummary();
     renderAudit();
     if (left) $('#reportFold').open = true;
-    (S.card ? $('#entsec') : $('#outsec')).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('#entsec').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
     say('發生錯誤：' + e.message);
     $('#runState').textContent = '轉換失敗：' + e.message;
@@ -2944,6 +3468,13 @@ globalThis.STProofreadingUI = Object.freeze({
   getViewMode: () => S.viewMode,
   editDisplayedEntry: (i, values) => commitDisplayedEntry(i, values),
   setDisplayedEntryEnabled,
+  getDisplayedPreset: () => displayedPreset(),
+  getDisplayedRegex: () => displayedRegex(),
+  editPresetPrompt: (i, values) => commitPresetPrompt(i, values),
+  setPresetPromptEnabled,
+  editRegexScript: (i, collectionKey, values) => commitRegexScript(i, collectionKey, values),
+  setRegexEnabled,
+  exportObject: () => exportObj(),
 });
 
 bindDrop(); bindExports(); bindEntryTools();

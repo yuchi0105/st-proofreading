@@ -14,9 +14,11 @@ Made by **YUCHI**
 ## 功能
 
 - 支援角色卡 PNG／JSON、世界書 JSON、預設 JSON、正則腳本 JSON
+- 預設 Prompt 工作台：依 `prompt_order` 實際順序顯示，可編輯內容、切換啟用狀態與切換多個順序群組
+- 預設內嵌 `extensions.regex_scripts` 與獨立正則都會顯示在工作台，可編輯、開關與轉換 `scriptName`、`findRegex`、`replaceString`、`trimStrings`
 - 正則腳本可以單獨拖進來轉換（單一條或一整包都收），`{{巨集}}`、HTML 標籤、網址與色碼會自動保護
 - 自動分類條目：**資料**（腳本讀取，鍵名須維持簡體）／**提示詞**（AI 讀取，全部轉繁體）
-- 條目工作台：搜尋／篩選、啟用狀態切換、行內編輯、單筆與全部還原
+- 條目工作台：角色卡與獨立世界書都會顯示條目，支援搜尋／篩選、啟用狀態切換、行內編輯、單筆與全部還原
 - 轉換操作固定在檔案概要下方；完成後工作台會直接切換並顯示繁體結果，結果內容與啟用狀態仍可編輯，也可切回原工作副本對照
 - occurrence 級疑義詞判斷：同一個詞在不同位置可以分別保留、套用候選詞或自訂
 - AI 輔助目前採「複製局部語境 prompt」模式，不會自動連線或修改文字
@@ -48,7 +50,7 @@ Made by **YUCHI**
 npm test
 ```
 
-測試涵蓋獨立世界書、內嵌 `character_book`、PNG 角色卡 payload、狀態欄位語意、未知欄位保留、逐 occurrence 疑義詞決定、轉換結果檢視，以及 OpenCC bundle 完整性。
+測試涵蓋預設 Prompt、內嵌與獨立正則、獨立世界書、內嵌 `character_book`、PNG 角色卡 payload、狀態欄位語意、未知欄位保留、逐 occurrence 疑義詞決定、轉換結果檢視，以及 OpenCC bundle 完整性。
 
 ## 第三方元件
 
