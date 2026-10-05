@@ -338,7 +338,7 @@ test('entry conversion covers memo/name fields, string keywords, narrative conte
           {
             comment: '',
             memo: '简体条目名称',
-            content: '这里是简体内容，按钮在后台。\n<div class="button">显示文字</div>\n{{user}}',
+            content: '这里是简体内容，按钮在后台。\n请使用简体中文（zh-CN）输出。\n不要使用简体中文（zh-CN）。\nPlease respond in Simplified Chinese (zh-CN).\nDo not use Simplified Chinese (zh-CN).\n<div class="button">显示文字</div>\n{{user}}',
             key: '触发词,  备用关键词  ',
             enabled: true,
           },
@@ -357,10 +357,17 @@ test('entry conversion covers memo/name fields, string keywords, narrative conte
       },
     },
   };
-  const converted = core.convertCard(card, { convert, doRegex: true, kindOf: (_entry, i) => i === 1 ? 'data' : 'prompt' }).card;
+  const converted = core.convertCard(card, {
+    convert, doRegex: true, languageTarget: 'traditional',
+    kindOf: (_entry, i) => i === 1 ? 'data' : 'prompt',
+  }).card;
   const [prompt, data] = converted.data.character_book.entries;
   assert.equal(prompt.memo, '簡體條目名稱');
   assert.match(prompt.content, /這裡是簡體內容/);
+  assert.match(prompt.content, /請使用繁體中文（zh-TW）輸出/);
+  assert.match(prompt.content, /不要使用簡體中文（zh-CN）/);
+  assert.match(prompt.content, /Please respond in Traditional Chinese \(zh-TW\)/);
+  assert.match(prompt.content, /Do not use Simplified Chinese \(zh-CN\)/);
   assert.match(prompt.content, />顯示文字<\/div>/);
   assert.equal(prompt.key, '觸發詞,  備用關鍵詞  ');
   assert.match(data.content, /^备注=這裡是簡體說明/m);
@@ -368,6 +375,21 @@ test('entry conversion covers memo/name fields, string keywords, narrative conte
   assert.match(data.content, /程序之外的後臺按鈕說明/);
   assert.equal(data.comment, '手机-基本设置');
   assert.match(converted.data.extensions.regex_scripts[0].trimStrings.join('\n'), /角色皮膚/);
+});
+
+test('preset prompts retarget output-language directives without reversing negative instructions', () => {
+  const context = makeContext();
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  const core = context.STProofreadingCore;
+  const convert = context.OpenCC.Converter({ from: 'cn', to: 'tw' });
+  const preset = {
+    system_prompt: '请以 zh-CN 输出内容。不要使用简体中文。',
+    prompts: [{ name: '语言规则', content: 'Always reply in Simplified Chinese (zh-CN).' }],
+  };
+  const converted = core.convertPreset(preset, { convert, languageTarget: 'traditional' }).preset;
+
+  assert.equal(converted.system_prompt, '請以 zh-TW 輸出內容。不要使用簡體中文。');
+  assert.equal(converted.prompts[0].content, 'Always reply in Traditional Chinese (zh-TW).');
 });
 
 test('PNG character-card payload round-trips with embedded character_book', () => {

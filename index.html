@@ -947,32 +947,74 @@ function restoreEntryAmbiguities(card, stash) {
   });
 }
 
+/**
+ * 只在「輸出／回覆語言」語境轉換 locale 指示。
+ * 否定句（例如「不要使用簡體中文」）必須保留，避免把語意整個反轉。
+ */
+function retargetLanguageDirectives(text, target) {
+  if (typeof text !== 'string' || !target) return text;
+  const toTraditional = target === 'traditional';
+  const source = toTraditional
+    ? /(?:簡體(?:中文)?|简体(?:中文)?|簡中|简中|Simplified\s+Chinese|zh[-_](?:CN|Hans))/i
+    : /(?:繁體(?:中文)?|繁体(?:中文)?|繁中|Traditional\s+Chinese|zh[-_](?:TW|Hant))/i;
+  const directive = /(?:使用|採用|采用|用|以|輸出|输出|回覆|回复|回答|生成|書寫|书写|作答|語言|语言|use|respond|reply|output|write|answer|speak|communicate|language)/i;
+  const negated = /(?:不要|不得|禁止|避免|切勿|勿|不用|不應|不应|不需|無須|无需|不|do\s+not|don't|not)\s*(?:使用|採用|采用|用|以|輸出|输出|回覆|回复|回答|use|respond|reply|output|write|answer|speak|communicate)?\s*$/i;
+  return text.split(/([\n。！？；，!?;,])/).map(segment => {
+    const at = segment.search(source);
+    if (at < 0 || !directive.test(segment)) return segment;
+    if (negated.test(segment.slice(Math.max(0, at - 18), at))) return segment;
+    if (toTraditional) {
+      return segment
+        .replace(/簡體中文|简体中文/g, '繁體中文')
+        .replace(/簡體|简体/g, '繁體')
+        .replace(/簡中|简中/g, '繁中')
+        .replace(/Simplified\s+Chinese/gi, 'Traditional Chinese')
+        .replace(/zh[-_]CN\b/gi, 'zh-TW')
+        .replace(/zh[-_]Hans\b/gi, 'zh-Hant');
+    }
+    return segment
+      .replace(/繁體中文|繁体中文/g, '简体中文')
+      .replace(/繁體|繁体/g, '简体')
+      .replace(/繁中/g, '简中')
+      .replace(/Traditional\s+Chinese/gi, 'Simplified Chinese')
+      .replace(/zh[-_]TW\b/gi, 'zh-CN')
+      .replace(/zh[-_]Hant\b/gi, 'zh-Hans');
+  }).join('');
+}
+
+function convertHumanText(text, convert, protectors, languageTarget) {
+  const converted = protectedConvert(text, convert, protectors);
+  return languageTarget
+    ? protectedConvert(converted, value => retargetLanguageDirectives(value, languageTarget), protectors)
+    : converted;
+}
+
 /** 資料條目的內容：逐行處理 */
-function convertDataContent(text, convert) {
+function convertDataContent(text, convert, languageTarget) {
   return text.split('\n').map(line => {
     const mSec = line.match(RE_SECTION);
-    if (mSec) return '[' + convert(mSec[1]) + ']';        // 聯絡人名 → 要跟 AI 一致
+    if (mSec) return '[' + retargetLanguageDirectives(convert(mSec[1]), languageTarget) + ']'; // 聯絡人名 → 要跟 AI 一致
 
     const mKv = line.match(RE_KV);
     if (mKv) {
       const key = mKv[1], val = mKv[2];
       const keepVal = isMachineValueKey(key)
         || /^\s*(https?:\/\/|#[0-9a-fA-F]{3,8}|rgba?\(|true|false|-?\d+(\.\d+)?\s*$)/.test(val);
-      return key + '=' + (keepVal ? val : protectedConvert(val, convert, [P_URL, P_HEX]));
+      return key + '=' + (keepVal ? val : convertHumanText(val, convert, [P_URL, P_HEX], languageTarget));
     }
 
     const mSt = line.match(RE_STICKER);
     if (mSt && !/^#/.test(line)) {
-      return convert(mSt[1]) + '--' + mSt[2];              // 名稱轉、網址不動
+      return retargetLanguageDirectives(convert(mSt[1]), languageTarget) + '--' + mSt[2]; // 名稱轉、網址不動
     }
     if (/^https?:\/\//.test(line.trim())) return line;     // 純網址
-    return protectedConvert(line, convert, [P_URL, P_HEX]);
+    return convertHumanText(line, convert, [P_URL, P_HEX], languageTarget);
   }).join('\n');
 }
 
 /** 一般提示詞文字 */
-function convertPrompt(text, convert) {
-  return protectedConvert(text, convert, [P_URL, P_HEX, P_BRACKET, P_TAG]);
+function convertPrompt(text, convert, languageTarget) {
+  return convertHumanText(text, convert, [P_URL, P_HEX, P_BRACKET, P_TAG], languageTarget);
 }
 
 /** 關鍵詞在不同版本可能是陣列，也可能是逗號分隔字串；維持來源形狀與空白。 */
@@ -987,12 +1029,13 @@ function convertKeywordValue(raw, convert) {
 }
 
 /**
- * 主轉換。opts = { convert, doRegex }
+ * 主轉換。opts = { convert, doRegex, languageTarget }
  * 回傳 { card, changed: [{where, before, after}] }
  */
 function convertCard(cardIn, opts) {
   const card = JSON.parse(JSON.stringify(cardIn));
   const convert = opts.convert;
+  const languageTarget = opts.languageTarget || null;
   const kindOf = opts.kindOf || ((e, i) => classifyEntry(e).kind);
   const changed = [];
   const note = (where, before, after) => { if (before !== after) changed.push({ where, before, after }); };
@@ -1004,13 +1047,13 @@ function convertCard(cardIn, opts) {
   for (const obj of [card, card.data].filter(Boolean)) {
     for (const k of PLAIN) {
       if (typeof obj[k] === 'string' && obj[k]) {
-        const v = convertPrompt(obj[k], convert);
+        const v = convertPrompt(obj[k], convert, languageTarget);
         note(k, obj[k], v); obj[k] = v;
       }
     }
     if (Array.isArray(obj.alternate_greetings)) {
       obj.alternate_greetings = obj.alternate_greetings.map((g, i) => {
-        const v = convertPrompt(g, convert); note(`開場白 ${i + 1}`, g, v); return v;
+        const v = convertPrompt(g, convert, languageTarget); note(`開場白 ${i + 1}`, g, v); return v;
       });
     }
     if (Array.isArray(obj.tags)) obj.tags = obj.tags.map(convert);
@@ -1022,7 +1065,7 @@ function convertCard(cardIn, opts) {
     // 角色卡靠這個字串綁定世界書，只改一邊就會找不到。
     if (book.name) {
       const oldName = book.name;
-      const newName = convert(oldName);
+      const newName = retargetLanguageDirectives(convert(oldName), languageTarget);
       if (newName !== oldName) {
         note('世界書名稱', oldName, newName);
         book.name = newName;
@@ -1045,14 +1088,14 @@ function convertCard(cardIn, opts) {
         const rev = canon('entryNames', e[nf]);
         if (rev) { note('條目名稱（還原）', e[nf], rev); e[nf] = rev; }
       } else if (e[nf]) {
-        const v = convert(e[nf]); note('條目名稱', e[nf], v); e[nf] = v;
+        const v = retargetLanguageDirectives(convert(e[nf]), languageTarget); note('條目名稱', e[nf], v); e[nf] = v;
       }
 
       // 內容
       if (e.content) {
         let v;
         if (cls.kind === 'data') {
-          v = convertDataContent(e.content, convert);
+          v = convertDataContent(e.content, convert, languageTarget);
           // 鍵名還原
           v = v.split('\n').map(line => {
             const m = line.match(RE_KV);
@@ -1062,7 +1105,7 @@ function convertCard(cardIn, opts) {
             return line;
           }).join('\n');
         } else {
-          v = convertPrompt(e.content, convert);
+          v = convertPrompt(e.content, convert, languageTarget);
         }
         note(`條目內容「${e[nf]}」`, e.content, v);
         e.content = v;
@@ -1083,7 +1126,7 @@ function convertCard(cardIn, opts) {
   const th = data.extensions?.tavern_helper;
   if (th?.scripts) for (const s of th.scripts) {
     if (s.name) { const v = convert(s.name); note('腳本名稱', s.name, v); s.name = v; }
-    if (s.info) { const v = convertPrompt(s.info, convert); note('腳本說明', s.info, v); s.info = v; }
+    if (s.info) { const v = convertPrompt(s.info, convert, languageTarget); note('腳本說明', s.info, v); s.info = v; }
     for (const b of s.button?.buttons || []) {
       const rev = canon('buttons', b.name);
       if (rev) { note('按鈕名稱（還原）', b.name, rev); b.name = rev; }
@@ -1539,20 +1582,23 @@ const presetRegexScripts = p => presetRegexCollections(p).flatMap(x => x.list);
 function convertPreset(presetIn, opts) {
   const p = JSON.parse(JSON.stringify(presetIn));
   const convert = opts.convert;
+  const languageTarget = opts.languageTarget || null;
   const changed = [];
   const note = (w, a, b) => { if (a !== b) changed.push({ where: w, before: a, after: b }); };
 
   for (const f of PRESET_TEXT_FIELDS) {
     if (typeof p[f] === 'string' && p[f]) {
-      const v = convertPrompt(p[f], convert); note(f, p[f], v); p[f] = v;
+      const v = convertPrompt(p[f], convert, languageTarget); note(f, p[f], v); p[f] = v;
     }
   }
   for (const pr of presetPrompts(p)) {
     if (typeof pr.name === 'string' && pr.name) {
-      const v = convert(pr.name); note('提示詞名稱', pr.name, v); pr.name = v;
+      const v = retargetLanguageDirectives(convert(pr.name), languageTarget);
+      note('提示詞名稱', pr.name, v); pr.name = v;
     }
     if (typeof pr.content === 'string' && pr.content) {
-      const v = convertPrompt(pr.content, convert); note(`「${pr.name}」內容`, pr.content, v); pr.content = v;
+      const v = convertPrompt(pr.content, convert, languageTarget);
+      note(`「${pr.name}」內容`, pr.content, v); pr.content = v;
     }
   }
   if (opts.doRegex) {
@@ -1836,7 +1882,8 @@ globalThis.STProofreadingCore = Object.freeze({
   detectEntryEnabledField, readEntryEnabled, writeEntryEnabled,
   entryNameField, entryLabel, scanEntryAmbiguities,
   protectEntryAmbiguities, restoreEntryAmbiguities,
-  classifyEntry, convertCard, convertPreset, convertRegexFile, validate,
+  classifyEntry, convertCard, convertPreset, convertRegexFile,
+  retargetLanguageDirectives, validate,
 });
 
 </script>
@@ -3357,6 +3404,7 @@ async function run() {
       buildReverseIndex(OC);
       const convert = OC.Converter({ from: dir.from, to: dir.to });
       const safeConvert = OC.Converter({ from: dir.from, to: dir.id === 'cn2twp' ? 'tw' : dir.to });
+      const languageTarget = dir.from === 'cn' ? 'traditional' : dir.from === 'tw' ? 'simplified' : null;
       const what = dir.label.split('　')[0];
 
       if (isRegex) {
@@ -3366,7 +3414,7 @@ async function run() {
         say(`${what}：${r2.changed.length} 處文字有變動`);
         say('已保護 {{巨集}}、HTML 標籤、網址與色碼不被轉換');
       } else if (isPreset) {
-        const r2 = convertPreset(doc, { convert, doRegex: $('#doRegex').checked });
+        const r2 = convertPreset(doc, { convert, doRegex: $('#doRegex').checked, languageTarget });
         doc = r2.preset;
         changedCount = r2.changed.length;
         say(`${what}：${r2.changed.length} 處文字有變動`);
@@ -3374,7 +3422,7 @@ async function run() {
         if ($('#doRegex').checked) say(`已同步處理 ${presetRegexScripts(doc).length} 條內嵌正則`);
       } else {
         const ambiguityStash = protectEntryAmbiguities(doc, S.decisions, safeConvert);
-        const r2 = convertCard(doc, { convert, doRegex: $('#doRegex').checked, kindOf });
+        const r2 = convertCard(doc, { convert, doRegex: $('#doRegex').checked, kindOf, languageTarget });
         doc = r2.card;
         restoreEntryAmbiguities(doc, ambiguityStash);
         changedCount = r2.changed.length;
@@ -3382,6 +3430,8 @@ async function run() {
         say(`已保護 ${S.kinds.filter(k => k === 'data').length} 個資料條目的名稱與鍵名不被轉換`);
         if (S.ambiguities.length) say(`已逐一保護 ${S.ambiguities.length} 個疑義詞位置，套用 ${S.decisions.size} 個人工決定`);
       }
+      if (languageTarget === 'traditional') say('已同步調整輸出語言指示：簡體中文／zh-CN → 繁體中文／zh-TW');
+      if (languageTarget === 'simplified') say('已同步調整輸出語言指示：繁體中文／zh-TW → 簡體中文／zh-CN');
     } else {
       if (!isRegex && !isPreset) {
         const ambiguityStash = protectEntryAmbiguities(doc, S.decisions, x => x);
