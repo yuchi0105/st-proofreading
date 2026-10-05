@@ -1013,8 +1013,55 @@ function convertDataContent(text, convert, languageTarget) {
 }
 
 /** 一般提示詞文字 */
+function transformWritableMacros(text, transformValue) {
+  if (typeof text !== 'string' || !text.includes('{{')) return text;
+  let out = '';
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    const start = text.indexOf('{{', cursor);
+    if (start < 0) return out + text.slice(cursor);
+    out += text.slice(cursor, start);
+
+    // 找到與目前 {{ 配對的 }}；允許 value 內含 {{user}} 等巢狀巨集。
+    let depth = 1;
+    let scan = start + 2;
+    let end = -1;
+    while (depth > 0) {
+      const nextOpen = text.indexOf('{{', scan);
+      const nextClose = text.indexOf('}}', scan);
+      if (nextClose < 0) break;
+      if (nextOpen >= 0 && nextOpen < nextClose) {
+        depth++;
+        scan = nextOpen + 2;
+      } else {
+        depth--;
+        scan = nextClose + 2;
+        if (depth === 0) end = scan;
+      }
+    }
+    if (end < 0) return out + text.slice(start); // 未閉合：保守地保持原文
+
+    const full = text.slice(start, end);
+    const body = full.slice(2, -2);
+    const writable = body.match(/^(\s*(?:setvar|setglobalvar|addvar|addglobalvar)\s*::\s*[^:\r\n{}]+?\s*::)([\s\S]*)$/i);
+    if (writable) {
+      // 指令與變數名稱不動，只處理最後一段可讀 value；不得 trim 任何空白。
+      out += '{{' + writable[1] + transformValue(writable[2]) + '}}';
+    } else {
+      out += full;
+    }
+    cursor = end;
+  }
+  return out;
+}
+
 function convertPrompt(text, convert, languageTarget) {
-  return convertHumanText(text, convert, [P_URL, P_HEX, P_BRACKET, P_TAG], languageTarget);
+  const withConvertedValues = transformWritableMacros(
+    text,
+    value => convertPrompt(value, convert, languageTarget),
+  );
+  return convertHumanText(withConvertedValues, convert, [P_URL, P_HEX, P_BRACKET, P_TAG], languageTarget);
 }
 
 /** 關鍵詞在不同版本可能是陣列，也可能是逗號分隔字串；維持來源形狀與空白。 */

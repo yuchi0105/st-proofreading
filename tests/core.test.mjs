@@ -392,6 +392,30 @@ test('preset prompts retarget output-language directives without reversing negat
   assert.equal(converted.prompts[0].content, 'Always reply in Traditional Chinese (zh-TW).');
 });
 
+test('multiline setvar values are converted while macro commands and identifiers stay exact', () => {
+  const context = makeContext();
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  const core = context.STProofreadingCore;
+  const convert = context.OpenCC.Converter({ from: 'cn', to: 'tw' });
+  const source = [
+    '{{setvar::简体变量::',
+    '### [日常氛围]',
+    '编织温暖与幸运的经纬，使用简体中文（zh-CN）输出。',
+    '{{user}}与角色保持羁绊。',
+    '}}',
+    '{{getvar::简体变量}}',
+  ].join('\n');
+  const preset = { prompts: [{ name: '巨集测试', content: source }] };
+  const converted = core.convertPreset(preset, { convert, languageTarget: 'traditional' }).preset;
+  const content = converted.prompts[0].content;
+
+  assert.match(content, /^\{\{setvar::简体变量::/);
+  assert.match(content, /### \[日常氛圍\]/);
+  assert.match(content, /編織溫暖與幸運的經緯，使用繁體中文（zh-TW）輸出/);
+  assert.match(content, /\{\{user\}\}與角色保持羈絆/);
+  assert.match(content, /\n\}\}\n\{\{getvar::简体变量\}\}$/);
+});
+
 test('PNG character-card payload round-trips with embedded character_book', () => {
   const { STProofreadingCore: core } = makeContext();
   const fixtureB64 = fs.readFileSync(path.join(here, 'fixtures', 'card-with-character-book.png.b64'), 'utf8').trim();
