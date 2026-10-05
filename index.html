@@ -1013,7 +1013,7 @@ function convertDataContent(text, convert, languageTarget) {
 }
 
 /** 一般提示詞文字 */
-function transformWritableMacros(text, transformValue) {
+function transformVariableMacros(text, transformIdentifier, transformValue) {
   if (typeof text !== 'string' || !text.includes('{{')) return text;
   let out = '';
   let cursor = 0;
@@ -1044,12 +1044,17 @@ function transformWritableMacros(text, transformValue) {
 
     const full = text.slice(start, end);
     const body = full.slice(2, -2);
-    const writable = body.match(/^(\s*(?:setvar|setglobalvar|addvar|addglobalvar)\s*::\s*[^:\r\n{}]+?\s*::)([\s\S]*)$/i);
+    const writable = body.match(/^(\s*(?:setvar|setglobalvar|addvar|addglobalvar)\s*::\s*)([^:\r\n{}]+?)(\s*::)([\s\S]*)$/i);
+    const reference = body.match(/^(\s*(?:getvar|getglobalvar|incvar|incglobalvar|decvar|decglobalvar)\s*::\s*)([^:\r\n{}]+?)(\s*)$/i);
     if (writable) {
-      // 指令與變數名稱不動，只處理最後一段可讀 value；不得 trim 任何空白。
-      out += '{{' + writable[1] + transformValue(writable[2]) + '}}';
+      // 同步轉換變數名稱與 value；所有分組原樣接回，不得 trim 任何空白。
+      out += '{{' + writable[1] + transformIdentifier(writable[2]) + writable[3] + transformValue(writable[4]) + '}}';
+    } else if (reference) {
+      // 已知引用必須與 setvar 使用完全相同的轉換結果。
+      out += '{{' + reference[1] + transformIdentifier(reference[2]) + reference[3] + '}}';
     } else {
-      out += full;
+      // 未知外層巨集保持原樣，但仍遞迴處理其中明確可辨識的變數巨集。
+      out += '{{' + transformVariableMacros(body, transformIdentifier, transformValue) + '}}';
     }
     cursor = end;
   }
@@ -1057,8 +1062,9 @@ function transformWritableMacros(text, transformValue) {
 }
 
 function convertPrompt(text, convert, languageTarget) {
-  const withConvertedValues = transformWritableMacros(
+  const withConvertedValues = transformVariableMacros(
     text,
+    identifier => convert(identifier),
     value => convertPrompt(value, convert, languageTarget),
   );
   return convertHumanText(withConvertedValues, convert, [P_URL, P_HEX, P_BRACKET, P_TAG], languageTarget);

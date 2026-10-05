@@ -392,7 +392,7 @@ test('preset prompts retarget output-language directives without reversing negat
   assert.equal(converted.prompts[0].content, 'Always reply in Traditional Chinese (zh-TW).');
 });
 
-test('multiline setvar values are converted while macro commands and identifiers stay exact', () => {
+test('multiline setvar values and all known variable references convert together', () => {
   const context = makeContext();
   vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
   const core = context.STProofreadingCore;
@@ -404,16 +404,26 @@ test('multiline setvar values are converted while macro commands and identifiers
     '{{user}}与角色保持羁绊。',
     '}}',
     '{{getvar::简体变量}}',
+    '{{addvar::简体变量::风格加值}}',
+    '{{incvar::简体变量}}',
+    '{{setglobalvar::禁果风格::简体正文}}',
+    '{{getglobalvar::禁果风格}}',
+    '{{custom::禁果风格}}',
   ].join('\n');
   const preset = { prompts: [{ name: '巨集测试', content: source }] };
   const converted = core.convertPreset(preset, { convert, languageTarget: 'traditional' }).preset;
   const content = converted.prompts[0].content;
 
-  assert.match(content, /^\{\{setvar::简体变量::/);
+  assert.match(content, /^\{\{setvar::簡體變量::/);
   assert.match(content, /### \[日常氛圍\]/);
   assert.match(content, /編織溫暖與幸運的經緯，使用繁體中文（zh-TW）輸出/);
   assert.match(content, /\{\{user\}\}與角色保持羈絆/);
-  assert.match(content, /\n\}\}\n\{\{getvar::简体变量\}\}$/);
+  assert.match(content, /\n\}\}\n\{\{getvar::簡體變量\}\}/);
+  assert.match(content, /\{\{addvar::簡體變量::風格加值\}\}/);
+  assert.match(content, /\{\{incvar::簡體變量\}\}/);
+  assert.match(content, /\{\{setglobalvar::禁果風格::簡體正文\}\}/);
+  assert.match(content, /\{\{getglobalvar::禁果風格\}\}/);
+  assert.match(content, /\{\{custom::禁果风格\}\}$/);
 });
 
 test('PNG character-card payload round-trips with embedded character_book', () => {
