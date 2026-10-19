@@ -244,9 +244,19 @@
   .confirm-head{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border-bottom:1px solid var(--rule)}
   .confirm-head b{font-size:13px}
   .confirm-list{max-height:560px;overflow:auto}
+  .confirm-group{border-bottom:1px solid var(--rule);background:#fbfbf8}
+  .confirm-group:last-child{border-bottom:0}
+  .confirm-group>summary{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;font-size:12.5px;font-weight:600}
+  .confirm-group[open]>summary{background:var(--sage)}
+  .confirm-group-tools{display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:9px 13px;background:#f4f5f1;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+  .confirm-group-tools .group-select{display:flex;align-items:center;gap:6px;margin-right:auto;font-size:12px;color:var(--soft)}
+  .confirm-group-tools button{min-height:40px;padding:6px 10px;border:1px solid var(--rule);background:#fff;color:var(--ink);font:inherit;font-size:12px;cursor:pointer}
+  .confirm-group-tools button:hover{border-color:var(--pass)}
   .confirm-item{padding:0;border-bottom:1px solid var(--rule)}
   .confirm-item:last-child{border-bottom:0}
-  .confirm-item>summary{cursor:pointer;padding:10px 13px;display:flex;justify-content:space-between;gap:10px;font-size:12px}
+  .confirm-item>summary{cursor:pointer;padding:10px 13px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px}
+  .confirm-item-title{display:flex;align-items:center;gap:8px;min-width:0}
+  .confirm-item-title input{width:18px;height:18px;flex:none;accent-color:var(--pass)}
   .confirm-item>summary .term{color:var(--amber);font-weight:600}
   .confirm-item-body{padding:0 13px 13px}
   .confirm-meta{font-size:11.5px;color:var(--soft);margin-bottom:5px}
@@ -806,15 +816,15 @@ const owns = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
  * false 則仍允許安全字形轉換，例如 皮肤 → 皮膚。
  */
 const AMBIGUITY_RULES = [
-  { id: 'cold-face-noodle', forms: ['冷麵', '冷面'], candidates: ['冷面', '冷麵'],
+  { id: 'cold-face-noodle', label: '冷面／冷麵', forms: ['冷麵', '冷面'], candidates: ['冷面', '冷麵'],
     description: '可能是冷淡表情，也可能是麵食。', protectOriginal: true },
-  { id: 'forbid-accuracy', forms: ['不準', '不准'], candidates: ['不准', '不準'],
+  { id: 'forbid-accuracy', label: '不准／不準', forms: ['不準', '不准'], candidates: ['不准', '不準'],
     description: '可能表示禁止，也可能表示不精確。', protectOriginal: true },
-  { id: 'hotel', forms: ['酒店'], candidates: ['飯店', '酒店'],
+  { id: 'hotel', label: '酒店', forms: ['酒店'], candidates: ['飯店', '酒店'],
     description: '可能是住宿設施，也可能是特定夜生活場所。', protectOriginal: true },
-  { id: 'information-message', forms: ['信息'], candidates: ['資訊', '訊息', '信息'],
+  { id: 'information-message', label: '信息', forms: ['信息'], candidates: ['資訊', '訊息', '信息'],
     description: '依語境可能是資料資訊、單則訊息，或刻意保留原詞。', protectOriginal: true },
-  { id: 'skin', forms: ['皮肤', '皮膚'], candidates: ['皮膚', '造型', '外觀'],
+  { id: 'skin', label: '皮膚／皮肤', forms: ['皮肤', '皮膚'], candidates: ['皮膚', '造型', '外觀'],
     description: '可能是人體皮膚，也可能指遊戲 cosmetic／skin。', protectOriginal: false },
 ];
 
@@ -1615,8 +1625,35 @@ const PRESET_TEXT_FIELDS = [
   'assistant_impersonation', 'human_sysprompt_message', 'wi_format', 'scenario_format',
   'personality_format',
 ];
+const PRESET_PROMPT_TITLE_FIELDS = ['name', 'title', 'display_name', 'label'];
 
 const presetPrompts = p => Array.isArray(p.prompts) ? p.prompts : [];
+
+function presetPromptTitleField(prompt) {
+  for (const key of PRESET_PROMPT_TITLE_FIELDS) if (typeof prompt?.[key] === 'string' && prompt[key] !== '') return key;
+  for (const key of PRESET_PROMPT_TITLE_FIELDS) if (typeof prompt?.[key] === 'string') return key;
+  return 'name';
+}
+
+function presetPromptTitle(prompt) {
+  return prompt?.[presetPromptTitleField(prompt)] || prompt?.identifier || '';
+}
+
+/** 中文 identifier 只有成套改掉 prompt_order 才安全；若轉換後撞名就整組保留。 */
+function presetIdentifierConversionMap(preset, convert) {
+  const ids = [...new Set(presetPrompts(preset)
+    .map(prompt => prompt?.identifier)
+    .filter(id => typeof id === 'string' && id !== ''))];
+  const proposals = new Map(ids.map(id => [id, convert(id)]));
+  const targetCounts = new Map();
+  for (const target of proposals.values()) targetCounts.set(target, (targetCounts.get(target) || 0) + 1);
+  const out = new Map();
+  for (const id of ids) {
+    const target = proposals.get(id);
+    if (target && target !== id && targetCounts.get(target) === 1) out.set(id, target);
+  }
+  return out;
+}
 
 /** 找出預設內所有已存在的正則容器；寫回時維持原欄位，不替來源搬家。 */
 function presetRegexCollections(p) {
@@ -1629,8 +1666,8 @@ function presetRegexCollections(p) {
 const presetRegexScripts = p => presetRegexCollections(p).flatMap(x => x.list);
 
 /**
- * 轉換預設。identifier 與 prompt_order 完全不動 —— 它們是程式配對用的鍵，
- * 一旦被繁化，提示詞就會從順序清單裡消失。
+ * 轉換預設。identifier 若有繁簡變化，必須與 prompt_order 成套改名；
+ * 轉換後撞名時則保留原 identifier，避免提示詞互相覆蓋。
  */
 function convertPreset(presetIn, opts) {
   const p = JSON.parse(JSON.stringify(presetIn));
@@ -1645,13 +1682,29 @@ function convertPreset(presetIn, opts) {
     }
   }
   for (const pr of presetPrompts(p)) {
-    if (typeof pr.name === 'string' && pr.name) {
-      const v = retargetLanguageDirectives(convert(pr.name), languageTarget);
-      note('提示詞名稱', pr.name, v); pr.name = v;
+    for (const field of PRESET_PROMPT_TITLE_FIELDS) {
+      if (typeof pr[field] !== 'string' || !pr[field]) continue;
+      const v = convertPrompt(pr[field], convert, languageTarget);
+      note(`提示詞標題（${field}）`, pr[field], v); pr[field] = v;
     }
     if (typeof pr.content === 'string' && pr.content) {
       const v = convertPrompt(pr.content, convert, languageTarget);
-      note(`「${pr.name}」內容`, pr.content, v); pr.content = v;
+      note(`「${presetPromptTitle(pr)}」內容`, pr.content, v); pr.content = v;
+    }
+  }
+  const identifierMap = presetIdentifierConversionMap(p, convert);
+  for (const pr of presetPrompts(p)) {
+    const before = pr.identifier;
+    if (!identifierMap.has(before)) continue;
+    pr.identifier = identifierMap.get(before);
+    note('提示詞 identifier（同步改名）', before, pr.identifier);
+  }
+  for (const group of p.prompt_order || []) {
+    for (const order of group.order || []) {
+      const before = order.identifier;
+      if (!identifierMap.has(before)) continue;
+      order.identifier = identifierMap.get(before);
+      note('prompt_order identifier（同步改名）', before, order.identifier);
     }
   }
   if (opts.doRegex) {
@@ -1696,7 +1749,7 @@ function validatePreset(p) {
   const cjk = prompts.filter(x => /[\u4e00-\u9fff]/.test(x.identifier || ''));
   if (cjk.length) {
     add('warn', `有 ${cjk.length} 個提示詞使用中文識別碼`,
-      '中文識別碼只要被任何繁簡工具處理過就可能對不上順序清單。校對台不會動它們，但若你之後用別的工具轉換，這裡就是風險點。', null);
+      '中文識別碼只要單邊被繁簡工具處理就可能對不上順序清單。校對台轉換時會同步修改 prompts 與 prompt_order；若另有外部腳本用字串引用，仍請另外確認。', null);
   }
 
   const enabledIds = new Set();
@@ -1704,11 +1757,11 @@ function validatePreset(p) {
   const empty = prompts.filter(x => enabledIds.has(x.identifier) && !x.marker && !(x.content || '').trim());
   if (empty.length) {
     add('info', `${empty.length} 個已啟用的提示詞內容是空的`,
-      empty.slice(0, 6).map(x => x.name || x.identifier).join('、') + (empty.length > 6 ? ' …' : '')
+      empty.slice(0, 6).map(presetPromptTitle).join('、') + (empty.length > 6 ? ' …' : '')
       + '。空提示詞不影響運作，只是沒有效果。', null);
   }
 
-  const legacy = prompts.filter(x => /<user>|<char>|<bot>/i.test(x.content || '')).map(x => x.name || x.identifier);
+  const legacy = prompts.filter(x => /<user>|<char>|<bot>/i.test(x.content || '')).map(presetPromptTitle);
   for (const f of PRESET_TEXT_FIELDS) if (/<user>|<char>|<bot>/i.test(p[f] || '')) legacy.push(f);
   if (legacy.length) {
     add('warn', '使用了舊式巨集 <user>',
@@ -1896,7 +1949,7 @@ function auditDoc(doc, kind) {
 
   /* --- 預設 --- */
   for (const p of doc?.prompts || []) {
-    const w = `提示詞「${p.name || p.identifier}」`;
+    const w = `提示詞「${presetPromptTitle(p)}」`;
     addScan(p.content || '', w);
     scanText(p.content || '', PROMPT_ATTACK, w, findings, 'warn', 'prompt');
   }
@@ -1979,6 +2032,7 @@ let S = {
   srcName: '', srcBuf: null, chunks: null, hadCcv3: false, isPng: false,
   card: null, originalCard: null, originalSource: null, out: null, report: '',
   kinds: [], open: new Set(), statusFields: [], decisions: new Map(), ambiguities: [],
+  ambiguitySelection: new Set(), ambiguityOpen: new Set(),
   editing: null, editMode: false, filters: { search: '', status: 'all', kind: 'all', confirm: false, modified: false },
   previewConvert: null, lastRun: null, viewMode: 'work', outputSnapshot: null,
   presetOrderIndex: 0,
@@ -2027,7 +2081,8 @@ async function load(file) {
     const buf = await file.arrayBuffer();
     S.srcBuf = buf;
     S.wb = null; S.uids = null; S.preset = null; S.rx = null; S.open = new Set();
-    S.decisions = new Map(); S.ambiguities = []; S.editing = null; S.editMode = false; S.previewConvert = null; S.lastRun = null; S.viewMode = 'work'; S.outputSnapshot = null; S.presetOrderIndex = 0;
+    S.decisions = new Map(); S.ambiguities = []; S.ambiguitySelection = new Set(); S.ambiguityOpen = new Set();
+    S.editing = null; S.editMode = false; S.previewConvert = null; S.lastRun = null; S.viewMode = 'work'; S.outputSnapshot = null; S.presetOrderIndex = 0;
     S.filters = { search: '', status: 'all', kind: 'all', confirm: false, modified: false };
     $('#entrySearch').value = '';
     $('#reportFold').open = false;
@@ -2240,7 +2295,7 @@ function configureWorkbench() {
   const intros = {
     card: '<b>資料</b>＝腳本讀取，名稱與鍵名必須維持簡體。<b>提示詞</b>＝AI 讀取，內容會轉成繁體。按「編輯模式」後可調整分類、狀態與內容；停用條目仍會轉換。',
     worldbook: '獨立世界書的每個條目都會顯示並接受轉換。原始與轉換結果都能透過「編輯模式」修改名稱、正文、關鍵詞與啟用狀態。',
-    preset: '依 Prompt Manager 的實際順序顯示全部提示詞。原始與轉換結果都可按「編輯模式」修改；內嵌 Regex Scripts 會列在同一工作台下方。',
+    preset: '依 Prompt Manager 的實際順序顯示全部提示詞。支援 name／title／display_name／label 標題；中文 identifier 會與順序清單同步轉換。原始與轉換結果都可編輯。',
     regex: '每條正則都可展開檢查；按「編輯模式」後可修改名稱、搜尋式、替換內容與 trimStrings，原始與轉換結果都支援。',
   };
   $('#workIntro').innerHTML = intros[S.kind] || intros.card;
@@ -2352,6 +2407,7 @@ function refreshAmbiguities(entryIndex = null) {
   }
   const valid = new Set(S.ambiguities.map(x => x.id));
   for (const id of S.decisions.keys()) if (!valid.has(id)) S.decisions.delete(id);
+  for (const id of S.ambiguitySelection) if (!valid.has(id)) S.ambiguitySelection.delete(id);
 }
 
 function entryEditor(e, i) {
@@ -2543,7 +2599,7 @@ function embeddedRegexStatusChangedAt(collectionKey, i) {
 function promptEditor(prompt, i) {
   return `<form class="entry-edit prompt-edit" data-editor-type="prompt" data-edit-index="${i}">
     <div class="edit-grid">
-      <label class="edit-field">Prompt 名稱<input name="name" value="${esc(prompt.name ?? '')}"></label>
+      <label class="edit-field">Prompt 名稱<input name="name" value="${esc(prompt[presetPromptTitleField(prompt)] ?? '')}"></label>
       <label class="edit-field">Prompt 正文<textarea name="content">${esc(prompt.content == null ? '' : String(prompt.content))}</textarea></label>
       <details class="advanced"><summary>進階：角色與插入位置</summary><div class="edit-grid advanced-grid">
         <label class="edit-field">Role<input name="role" value="${esc(prompt.role ?? '')}" placeholder="system / user / assistant"></label>
@@ -2628,7 +2684,7 @@ function renderPresetEntries() {
   const f = S.filters, q = f.search.toLocaleLowerCase();
   const visiblePrompts = prompts.filter(({ prompt, index }) => {
     const enabled = presetPromptEnabled(p, prompt), changed = presetPromptChangedAt(index) || presetPromptStatusChangedAt(index);
-    const haystack = [prompt.name, prompt.identifier, prompt.role, prompt.content].join('\n').toLocaleLowerCase();
+    const haystack = [presetPromptTitle(prompt), prompt.identifier, prompt.role, prompt.content].join('\n').toLocaleLowerCase();
     return (!q || haystack.includes(q)) && (f.status === 'all' || (f.status === 'enabled') === enabled) && (!f.modified || changed);
   });
   const visibleRegex = regexes.filter(record => {
@@ -2643,7 +2699,7 @@ function renderPresetEntries() {
     const key = `p:${index}`, open = S.open.has(key), enabled = presetPromptEnabled(p, prompt);
     const changed = presetPromptChangedAt(index) || presetPromptStatusChangedAt(index);
     return `<div class="ent-wrap ${enabled ? '' : 'is-off'}"><div class="ent">
-      <button type="button" class="tw" data-work-toggle="${key}" aria-expanded="${open}"><span class="caret">▶</span><span class="nm">${esc(prompt.name || prompt.identifier || `Prompt ${index + 1}`)}</span></button>
+      <button type="button" class="tw" data-work-toggle="${key}" aria-expanded="${open}"><span class="caret">▶</span><span class="nm">${esc(presetPromptTitle(prompt) || `Prompt ${index + 1}`)}</span></button>
       <span class="ent-headbadges"><span class="mini-badge">${prompt.marker ? 'Marker' : esc(prompt.role || 'system')}</span>${!listed ? '<span class="mini-badge hot">未加入順序</span>' : ''}${changed ? '<span class="mini-badge changed">已修改</span>' : ''}</span>
       ${S.editMode ? `<label class="switch" title="${listed ? '切換目前順序群組中的狀態' : '開啟時會加入目前順序群組'}"><input type="checkbox" data-prompt-enabled="${index}" ${enabled ? 'checked' : ''}><span class="switch-track"></span><span>${enabled ? '啟用' : '停用'}</span></label>` : `<span class="mini-badge">${enabled ? '啟用' : '停用'}</span>`}
       <span class="why mono">${esc(prompt.identifier || '無 identifier')}</span></div>
@@ -2717,7 +2773,7 @@ function savePresetPrompt(i, form) {
 function commitPresetPrompt(i, values) {
   const prompt = presetPrompts(displayedPreset())[i];
   if (!prompt) return;
-  if (values.name !== undefined) prompt.name = values.name;
+  if (values.name !== undefined) prompt[presetPromptTitleField(prompt)] = values.name;
   const normalized = String(prompt.content ?? '').replace(/\r\n?/g, '\n');
   if (values.content !== undefined && values.content !== normalized) prompt.content = values.content;
   if (values.role !== undefined) prompt.role = values.role;
@@ -3078,8 +3134,49 @@ function renderWorkbenchStatus() {
 
 function setAmbiguityDecision(id, decision) {
   S.decisions.set(id, { ...decision, source: decision.source || 'manual' });
+  S.ambiguitySelection.delete(id);
+  finishAmbiguityMutation();
+}
+
+function finishAmbiguityMutation() {
   invalidateOutput();
   renderAmbiguities(); renderWorkbenchStatus(); renderEntries(); renderApplySummary();
+}
+
+function ambiguityGroups(list = S.ambiguities || []) {
+  const byRule = new Map(AMBIGUITY_RULES.map(rule => [rule.id, { rule, items: [] }]));
+  for (const occurrence of list) {
+    if (!byRule.has(occurrence.ruleId)) {
+      byRule.set(occurrence.ruleId, {
+        rule: { id: occurrence.ruleId, label: occurrence.original, candidates: occurrence.candidates }, items: [],
+      });
+    }
+    byRule.get(occurrence.ruleId).items.push(occurrence);
+  }
+  return [...byRule.values()].filter(group => group.items.length);
+}
+
+function selectAmbiguities(ids, selected = true) {
+  const valid = new Set((S.ambiguities || []).map(x => x.id));
+  for (const id of ids || []) {
+    if (!valid.has(id)) continue;
+    if (selected) S.ambiguitySelection.add(id); else S.ambiguitySelection.delete(id);
+  }
+}
+
+function applyAmbiguityBulk(ruleId, action, value) {
+  const items = (S.ambiguities || []).filter(x => x.ruleId === ruleId && S.ambiguitySelection.has(x.id));
+  if (!items.length) return 0;
+  for (const occurrence of items) {
+    if (action === 'candidate' && !occurrence.candidates.includes(value)) continue;
+    const decision = action === 'keep'
+      ? { action: 'keep', value: occurrence.original, source: 'manual' }
+      : { action: 'candidate', value, source: 'manual' };
+    S.decisions.set(occurrence.id, decision);
+    S.ambiguitySelection.delete(occurrence.id);
+  }
+  finishAmbiguityMutation();
+  return items.length;
 }
 
 async function copyText(text) {
@@ -3111,27 +3208,68 @@ function renderAmbiguities() {
   if (!list.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
   box.classList.remove('hidden');
   const unresolved = unresolvedAmbiguities().length;
-  box.innerHTML = `<summary class="confirm-head"><b>需要再次確認</b><span class="mini-badge ${unresolved ? 'hot' : ''}">${unresolved ? `尚有 ${unresolved} 處` : '全部已處理'}</span></summary><div class="confirm-list">`
-    + list.map(x => {
-      const d = S.decisions.get(x.id);
-      const label = entryLabel(entriesOf()[x.entryIndex] || {});
-      const decisionText = d ? (d.action === 'keep' ? '保留原詞' : d.value) : '待確認';
-      return `<details class="confirm-item" data-occurrence="${esc(x.id)}">
-        <summary><span>${esc(label)}・<span class="term">${esc(x.original)}</span></span><span>${esc(decisionText)}</span></summary>
-        <div class="confirm-item-body">
-        <div class="confirm-meta">${esc(label)}・${x.field === 'content' ? '正文' : '名稱'}・${esc(x.description)}</div>
-        <div class="confirm-context">${esc(x.before)}<mark>${esc(x.original)}</mark>${esc(x.after)}</div>
-        <div class="confirm-meta" style="margin-top:6px">原文：<b>${esc(x.original)}</b>　自動繁化可能結果：<b>${esc(x.converted)}</b></div>
-        <div class="confirm-candidates">
-          <button type="button" data-amb-action="keep" data-id="${esc(x.id)}" class="${d?.action === 'keep' ? 'selected' : ''}">保留原詞</button>
-          ${x.candidates.map(value => `<button type="button" data-amb-action="candidate" data-id="${esc(x.id)}" data-value="${esc(value)}" class="${d?.action === 'candidate' && d.value === value ? 'selected' : ''}">${esc(value)}</button>`).join('')}
-          <span class="custom-choice"><input type="text" class="custom-value" value="${d?.action === 'custom' ? esc(d.value) : ''}" placeholder="自訂詞"><button type="button" data-amb-action="custom" data-id="${esc(x.id)}" class="${d?.action === 'custom' ? 'selected' : ''}">採用自訂</button></span>
-          <button type="button" data-amb-action="copy-ai" data-id="${esc(x.id)}">複製 AI 判斷內容</button>
+  const groups = ambiguityGroups(list);
+  box.innerHTML = `<summary class="confirm-head"><b>需要再次確認・依詞彙分組</b><span class="mini-badge ${unresolved ? 'hot' : ''}">${unresolved ? `尚有 ${unresolved} 處` : '全部已處理'}</span></summary><div class="confirm-list">`
+    + groups.map(({ rule, items }) => {
+      const groupUnresolved = items.filter(x => !S.decisions.has(x.id)).length;
+      const selected = items.filter(x => S.ambiguitySelection.has(x.id)).length;
+      return `<details class="confirm-group" data-rule-group="${esc(rule.id)}" ${S.ambiguityOpen.has(rule.id) ? 'open' : ''}>
+        <summary><span>${esc(rule.label || items[0].original)}</span><span><span class="mini-badge ${groupUnresolved ? 'hot' : ''}">${groupUnresolved ? `待確認 ${groupUnresolved}` : '已處理'}</span> <span class="mini-badge">共 ${items.length}</span></span></summary>
+        <div class="confirm-group-tools">
+          <label class="group-select"><input type="checkbox" data-amb-select-group="${esc(rule.id)}">勾選本組全部 <span>（已勾 ${selected}）</span></label>
+          <button type="button" data-amb-bulk-action="keep" data-rule-id="${esc(rule.id)}">批次保留原詞</button>
+          ${(rule.candidates || items[0].candidates).map(value => `<button type="button" data-amb-bulk-action="candidate" data-rule-id="${esc(rule.id)}" data-value="${esc(value)}">批次套用：${esc(value)}</button>`).join('')}
         </div>
-        <div class="ai-note">AI 輔助目前不會連線；只複製這一筆局部語境與候選詞，由你貼到慣用的 AI。結果不會自動改字。</div>
-        </div>
+        ${items.map(x => {
+          const d = S.decisions.get(x.id);
+          const label = entryLabel(entriesOf()[x.entryIndex] || {});
+          const decisionText = d ? (d.action === 'keep' ? '保留原詞' : d.value) : '待確認';
+          return `<details class="confirm-item" data-occurrence="${esc(x.id)}">
+            <summary><span class="confirm-item-title"><input type="checkbox" data-amb-select="${esc(x.id)}" ${S.ambiguitySelection.has(x.id) ? 'checked' : ''} aria-label="勾選這一處"><span>${esc(label)}・<span class="term">${esc(x.original)}</span></span></span><span>${esc(decisionText)}</span></summary>
+            <div class="confirm-item-body">
+            <div class="confirm-meta">${esc(label)}・${x.field === 'content' ? '正文' : '名稱'}・${esc(x.description)}</div>
+            <div class="confirm-context">${esc(x.before)}<mark>${esc(x.original)}</mark>${esc(x.after)}</div>
+            <div class="confirm-meta" style="margin-top:6px">原文：<b>${esc(x.original)}</b>　自動繁化可能結果：<b>${esc(x.converted)}</b></div>
+            <div class="confirm-candidates">
+              <button type="button" data-amb-action="keep" data-id="${esc(x.id)}" class="${d?.action === 'keep' ? 'selected' : ''}">保留原詞</button>
+              ${x.candidates.map(value => `<button type="button" data-amb-action="candidate" data-id="${esc(x.id)}" data-value="${esc(value)}" class="${d?.action === 'candidate' && d.value === value ? 'selected' : ''}">${esc(value)}</button>`).join('')}
+              <span class="custom-choice"><input type="text" class="custom-value" value="${d?.action === 'custom' ? esc(d.value) : ''}" placeholder="自訂詞"><button type="button" data-amb-action="custom" data-id="${esc(x.id)}" class="${d?.action === 'custom' ? 'selected' : ''}">採用自訂</button></span>
+              <button type="button" data-amb-action="copy-ai" data-id="${esc(x.id)}">複製 AI 判斷內容</button>
+            </div>
+            <div class="ai-note">AI 輔助目前不會連線；只複製這一筆局部語境與候選詞，由你貼到慣用的 AI。結果不會自動改字。</div>
+            </div>
+          </details>`;
+        }).join('')}
       </details>`;
     }).join('') + '</div>';
+
+  box.querySelectorAll('.confirm-group').forEach(group => group.addEventListener('toggle', () => {
+    const id = group.dataset.ruleGroup;
+    if (group.open) S.ambiguityOpen.add(id); else S.ambiguityOpen.delete(id);
+  }));
+  box.querySelectorAll('input[data-amb-select]').forEach(input => {
+    input.addEventListener('click', event => event.stopPropagation());
+    input.addEventListener('change', () => {
+      selectAmbiguities([input.dataset.ambSelect], input.checked);
+      renderAmbiguities();
+    });
+  });
+  box.querySelectorAll('input[data-amb-select-group]').forEach(input => {
+    const id = input.dataset.ambSelectGroup;
+    const items = list.filter(x => x.ruleId === id);
+    const n = items.filter(x => S.ambiguitySelection.has(x.id)).length;
+    input.checked = !!items.length && n === items.length;
+    input.indeterminate = n > 0 && n < items.length;
+    input.addEventListener('change', () => {
+      selectAmbiguities(items.map(x => x.id), input.checked);
+      S.ambiguityOpen.add(id);
+      renderAmbiguities();
+    });
+  });
+  box.querySelectorAll('[data-amb-bulk-action]').forEach(button => button.addEventListener('click', () => {
+    const count = applyAmbiguityBulk(button.dataset.ruleId, button.dataset.ambBulkAction, button.dataset.value);
+    if (!count) alert('請先勾選要批次處理的位置。');
+  }));
   box.querySelectorAll('[data-amb-action]').forEach(button => button.addEventListener('click', async () => {
     const x = S.ambiguities.find(item => item.id === button.dataset.id);
     if (!x) return;
@@ -3471,7 +3609,7 @@ async function run() {
         doc = r2.preset;
         changedCount = r2.changed.length;
         say(`${what}：${r2.changed.length} 處文字有變動`);
-        say(`已保護 ${(doc.prompts || []).length} 個提示詞識別碼與整份順序清單不被轉換`);
+        say(`已同步檢查 ${(doc.prompts || []).length} 個提示詞 identifier 與整份順序清單；有繁簡變化時成套改名，撞名則保留`);
         if ($('#doRegex').checked) say(`已同步處理 ${presetRegexScripts(doc).length} 條內嵌正則`);
       } else {
         const ambiguityStash = protectEntryAmbiguities(doc, S.decisions, safeConvert);
@@ -3658,6 +3796,14 @@ globalThis.STProofreadingUI = Object.freeze({
   setPresetPromptEnabled,
   editRegexScript: (i, collectionKey, values) => commitRegexScript(i, collectionKey, values),
   setRegexEnabled,
+  getAmbiguityState: () => ({
+    ambiguities: cloneData(S.ambiguities),
+    decisions: [...S.decisions.entries()].map(([id, decision]) => [id, cloneData(decision)]),
+    selection: [...S.ambiguitySelection],
+    groups: ambiguityGroups().map(({ rule, items }) => ({ ruleId: rule.id, label: rule.label, count: items.length })),
+  }),
+  selectAmbiguities,
+  applyAmbiguityBulk,
   exportObject: () => exportObj(),
 });
 

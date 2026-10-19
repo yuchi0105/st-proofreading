@@ -392,6 +392,86 @@ test('preset prompts retarget output-language directives without reversing negat
   assert.equal(converted.prompts[0].content, 'Always reply in Traditional Chinese (zh-TW).');
 });
 
+test('preset title variants and Chinese identifiers convert with prompt_order in lockstep', () => {
+  const context = makeContext();
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  const core = context.STProofreadingCore;
+  const convert = context.OpenCC.Converter({ from: 'cn', to: 'tw' });
+  const preset = {
+    prompts: [
+      { identifier: '简体标题', title: '备用标题', content: '简体正文', unknown: 'keep' },
+      { identifier: 'display', display_name: '显示名称', content: '' },
+    ],
+    prompt_order: [{ order: [{ identifier: '简体标题', enabled: true }, { identifier: 'display', enabled: false }] }],
+  };
+  const converted = core.convertPreset(preset, { convert }).preset;
+
+  assert.equal(converted.prompts[0].title, '備用標題');
+  assert.equal(converted.prompts[0].identifier, '簡體標題');
+  assert.equal(converted.prompt_order[0].order[0].identifier, '簡體標題');
+  assert.equal(converted.prompts[1].display_name, '顯示名稱');
+  assert.equal(converted.prompts[0].unknown, 'keep');
+});
+
+test('nonstandard preset title fields stay editable without adding a replacement name field', async () => {
+  const context = makeContext();
+  const dom = installDomStub(context);
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  vm.runInContext(scripts[1], context, { filename: 'index-ui.js' });
+  const preset = {
+    prompts: [{ identifier: 'custom', title: '备用标题', content: '正文' }],
+    prompt_order: [{ order: [{ identifier: 'custom', enabled: true }] }],
+  };
+  const bytes = new TextEncoder().encode(JSON.stringify(preset));
+  await context.STProofreadingUI.load({ name: 'preset.json', async arrayBuffer() { return bytes.buffer; } });
+
+  assert.match(dom.getElement('#entries').innerHTML, /备用标题/);
+  context.STProofreadingUI.editPresetPrompt(0, { name: '手動標題' });
+  const exported = context.STProofreadingUI.exportObject();
+  assert.equal(exported.prompts[0].title, '手動標題');
+  assert.equal('name' in exported.prompts[0], false);
+});
+
+test('preset identifier conversion keeps originals when converted keys would collide', () => {
+  const { STProofreadingCore: core } = makeContext();
+  const preset = {
+    prompts: [{ identifier: '甲', name: '一' }, { identifier: '乙', name: '二' }],
+    prompt_order: [{ order: [{ identifier: '甲' }, { identifier: '乙' }] }],
+  };
+  const convert = value => value === '甲' || value === '乙' ? '同' : value;
+  const converted = core.convertPreset(preset, { convert }).preset;
+
+  assert.deepEqual(converted.prompts.map(x => x.identifier), ['甲', '乙']);
+  assert.deepEqual(converted.prompt_order[0].order.map(x => x.identifier), ['甲', '乙']);
+});
+
+test('ambiguities render in word groups and selected occurrences accept one bulk decision', async () => {
+  const context = makeContext();
+  const dom = installDomStub(context);
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  vm.runInContext(scripts[1], context, { filename: 'index-ui.js' });
+  const bytes = new TextEncoder().encode(JSON.stringify(fixture('character-card.json')));
+  await context.STProofreadingUI.load({ name: 'character-card.json', async arrayBuffer() { return bytes.buffer; } });
+
+  assert.match(dom.getElement('#ambiguities').innerHTML, /data-rule-group="skin"/);
+  assert.match(dom.getElement('#ambiguities').innerHTML, /依詞彙分組/);
+  const before = context.STProofreadingUI.getAmbiguityState();
+  const skin = before.ambiguities.filter(x => x.ruleId === 'skin');
+  assert.ok(skin.length >= 2);
+  context.STProofreadingUI.selectAmbiguities(skin.map(x => x.id));
+  const applied = context.STProofreadingUI.applyAmbiguityBulk('skin', 'candidate', '造型');
+  assert.equal(applied, skin.length);
+
+  const after = context.STProofreadingUI.getAmbiguityState();
+  const decisions = new Map(after.decisions);
+  assert.ok(skin.every(x => decisions.get(x.id)?.value === '造型'));
+  assert.ok(skin.every(x => !after.selection.includes(x.id)));
+
+  dom.getElement('#dir').value = 'cn2tw';
+  await context.STProofreadingUI.run();
+  assert.match(context.STProofreadingUI.getDisplayedEntries().map(x => x.content).join('\n'), /造型/);
+});
+
 test('multiline setvar values and all known variable references convert together', () => {
   const context = makeContext();
   vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });

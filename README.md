@@ -15,6 +15,7 @@ Made by **YUCHI**
 
 - 支援角色卡 PNG／JSON、世界書 JSON、預設 JSON、正則腳本 JSON
 - 預設 Prompt 工作台：依 `prompt_order` 實際順序顯示，可編輯內容、切換啟用狀態與切換多個順序群組
+- 預設的 `name`／`title`／`display_name`／`label` 都會作為可讀標題轉換；中文 identifier 會和 `prompt_order` 成套同步改名，撞名時則安全保留原值
 - 預設內嵌 `extensions.regex_scripts` 與獨立正則都會顯示在工作台，可編輯、開關與轉換 `scriptName`、`findRegex`、`replaceString`、`trimStrings`
 - 正則腳本可以單獨拖進來轉換（單一條或一整包都收），`{{巨集}}`、HTML 標籤、網址與色碼會自動保護
 - `{{setvar::名稱::文字}}` 的多行文字會完整繁化，變數名稱也會與 `getvar`／`addvar`／`incvar`／`decvar` 及 global 版本同步轉換；`{{user}}`、`{{char}}` 等純控制巨集維持原樣
@@ -24,6 +25,7 @@ Made by **YUCHI**
 - 轉換操作固定在檔案概要下方；完成後工作台會直接顯示繁體結果，下載 PNG／JSON／校對報告的按鈕也會在上方出現
 - 轉繁體時會同步修正可讀提示中的語言指示，例如「使用簡體中文（zh-CN）輸出」改為「使用繁體中文（zh-TW）輸出」；否定句則保留原意
 - occurrence 級疑義詞判斷：同一個詞在不同位置可以分別保留、套用候選詞或自訂
+- 疑義詞依「皮膚／信息／酒店」等規則折疊分組，可勾選整組或指定位置，再一次批次套用候選詞或保留原詞
 - AI 輔助目前採「複製局部語境 prompt」模式，不會自動連線或修改文字
 - 校對報告與風險稽核
 - 可勾選要套用的修正，選擇轉換方向
