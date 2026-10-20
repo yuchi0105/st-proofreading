@@ -16,9 +16,10 @@ Made by **YUCHI**
 - 支援角色卡 PNG／JSON、世界書 JSON、預設 JSON、正則腳本 JSON
 - 預設 Prompt 工作台：依 `prompt_order` 實際順序顯示，可編輯內容、切換啟用狀態與切換多個順序群組
 - 預設的 `name`／`title`／`display_name`／`label` 都會作為可讀標題轉換；中文 identifier 會和 `prompt_order` 成套同步改名，撞名時則安全保留原值
+- 白白工具箱 `presetPromptGroups` 的可見分組名稱也會轉換，分組 ID、順序與提示詞關聯保持不變
 - 預設內嵌 `extensions.regex_scripts` 與獨立正則都會顯示在工作台，可編輯、開關與轉換 `scriptName`、`findRegex`、`replaceString`、`trimStrings`
-- 正則腳本可以單獨拖進來轉換（單一條或一整包都收），`{{巨集}}`、HTML 標籤、網址與色碼會自動保護
-- `{{setvar::名稱::文字}}` 的多行文字會完整繁化，變數名稱也會與 `getvar`／`addvar`／`incvar`／`decvar` 及 global 版本同步轉換；`{{user}}`、`{{char}}` 等純控制巨集維持原樣
+- 正則腳本可以單獨拖進來轉換（單一條或一整包都收）；HTML 的可見標籤文字與 `title`／`aria-label` 等人類可讀屬性會繁化，class／id／CSS／JavaScript／網址與色碼維持原樣
+- `{{setvar::名稱::文字}}` 的多行文字會完整繁化，變數名稱也會與 `getvar`／`addvar`／`incvar`／`decvar` 及 global 版本同步轉換；`{{random::選項一::選項二}}` 會逐項繁化，`{{user}}`、`{{char}}` 等純控制巨集維持原樣
 - 自動分類條目：**資料**（腳本讀取，鍵名須維持簡體）／**提示詞**（AI 讀取，全部轉繁體）
 - 條目工作台：角色卡與獨立世界書都會顯示條目，支援搜尋／篩選、啟用狀態切換、行內編輯、單筆與全部還原
 - 參考 SillyTavern 工具箱的操作方式，以全域「編輯模式」開關顯示編輯與狀態控制；原始內容與轉換結果都可編輯

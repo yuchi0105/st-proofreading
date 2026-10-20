@@ -231,6 +231,31 @@ test('standalone regex scripts are visible, converted, editable, and keep unknow
   assert.deepEqual(exported[0].placement, [2]);
 });
 
+test('regex HTML converts visible attributes while preserving selectors, CSS, and JavaScript', () => {
+  const context = makeContext();
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  const core = context.STProofreadingCore;
+  const convert = context.OpenCC.Converter({ from: 'cn', to: 'tw' });
+  const css = '<style>.简体类::before{content:"简体样式"}</style>';
+  const js = '<script>const 简体变量 = "简体脚本";</script>';
+  const source = [{
+    scriptName: '界面按钮',
+    findRegex: '/切换主题/g',
+    replaceString: css
+      + '<button class="简体类" aria-label="切换日夜主题" title="$2内容">简体按钮</button>'
+      + js,
+  }];
+  const converted = core.convertRegexFile(source, { convert }).list[0];
+
+  assert.equal(converted.findRegex, '/切換主題/g');
+  assert.match(converted.replaceString, /class="简体类"/);
+  assert.match(converted.replaceString, /aria-label="切換日夜主題"/);
+  assert.match(converted.replaceString, /title="\$2內容"/);
+  assert.match(converted.replaceString, />簡體按鈕<\/button>/);
+  assert.ok(converted.replaceString.startsWith(css));
+  assert.ok(converted.replaceString.endsWith(js));
+});
+
 test('standalone worldbook keeps disable semantics and every unknown field', () => {
   const { STProofreadingCore: core } = makeContext();
   const original = fixture('standalone-worldbook.json');
@@ -411,6 +436,47 @@ test('preset title variants and Chinese identifiers convert with prompt_order in
   assert.equal(converted.prompt_order[0].order[0].identifier, '簡體標題');
   assert.equal(converted.prompts[1].display_name, '顯示名稱');
   assert.equal(converted.prompts[0].unknown, 'keep');
+});
+
+test('preset converts random choices, prompt pseudo-tags, bare Chinese placeholders, and display groups', () => {
+  const context = makeContext();
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  const core = context.STProofreadingCore;
+  const convert = context.OpenCC.Converter({ from: 'cn', to: 'tw' });
+  const preset = {
+    prompts: [{
+      identifier: 'phase',
+      name: '推进速度',
+      content: [
+        '<writing_style: 台湾乡愁>',
+        '{{random::外部环境与世俗事务::双方言行与个人立场::包含{{user}}的角色内在心绪}}',
+        '{{小剧场名字}}',
+        '严禁以失控式反应制造浓烈感。',
+        '</thinking标签包裹，完整展开每个Step阶段。',
+        '<thinking>',
+      ].join('\n'),
+    }],
+    extensions: {
+      baibaiToolkit: {
+        presetPromptGroups: {
+          version: 1,
+          groups: [{ id: 'group-id', name: '叙事氛围-单选', order: 3, collapsed: true, unknown: 'keep' }],
+        },
+      },
+    },
+  };
+  const converted = core.convertPreset(preset, { convert, languageTarget: 'traditional' }).preset;
+  const content = converted.prompts[0].content;
+
+  assert.match(content, /<writing_style: 臺灣鄉愁>/);
+  assert.match(content, /\{\{random::外部環境與世俗事務::雙方言行與個人立場::包含\{\{user\}\}的角色內在心緒\}\}/);
+  assert.match(content, /\{\{小劇場名字\}\}/);
+  assert.match(content, /反應製造濃烈感/);
+  assert.match(content, /<\/thinking標籤包裹，完整展開每個Step階段/);
+  assert.match(content, /<thinking>/);
+  assert.equal(converted.extensions.baibaiToolkit.presetPromptGroups.groups[0].name, '敘事氛圍-單選');
+  assert.equal(converted.extensions.baibaiToolkit.presetPromptGroups.groups[0].id, 'group-id');
+  assert.equal(converted.extensions.baibaiToolkit.presetPromptGroups.groups[0].unknown, 'keep');
 });
 
 test('nonstandard preset title fields stay editable without adding a replacement name field', async () => {

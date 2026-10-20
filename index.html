@@ -803,8 +803,22 @@ function protectedConvert(text, convert, protectors) {
 
 const P_URL = /https?:\/\/[^\s"'<>）)，,]+/g;
 const P_HEX = /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g;
-const P_TAG = /\{\{[^}]*\}\}|<\/?[A-Za-z][\w:-]*[^>]*>/g;
+// 不允許標籤跨過下一個「<」；不完整的 </thinking標籤... 不應把後續整段正文吞掉。
+const P_TAG = /\{\{[^}]*\}\}|<\/?[A-Za-z][\w:-]*[^<>]*>/g;
 const P_BRACKET = /\[(?:bqb|zz|yy|music|img)-[^\]]*\]/g;
+
+// OpenCC 的最長詞匹配偶爾會在相鄰詞邊界漏轉，例如「反应制造」會先變成
+// 「反應制造」。只補已確認且不會改變語意的詞，不對整段文字盲目跑第二次。
+const SAFE_BOUNDARY_TERMS = ['制造', '制作'];
+
+function repairConverterBoundaryMisses(text, convert) {
+  let out = text;
+  for (const source of SAFE_BOUNDARY_TERMS) {
+    const target = convert(source);
+    if (target !== source) out = out.split(source).join(target);
+  }
+  return out;
+}
 
 /* ---------- 條目工作台共用資料與疑義詞規則 ---------- */
 const cloneData = value => JSON.parse(JSON.stringify(value));
@@ -993,7 +1007,7 @@ function retargetLanguageDirectives(text, target) {
 }
 
 function convertHumanText(text, convert, protectors, languageTarget) {
-  const converted = protectedConvert(text, convert, protectors);
+  const converted = protectedConvert(text, value => repairConverterBoundaryMisses(convert(value), convert), protectors);
   return languageTarget
     ? protectedConvert(converted, value => retargetLanguageDirectives(value, languageTarget), protectors)
     : converted;
@@ -1020,6 +1034,31 @@ function convertDataContent(text, convert, languageTarget) {
     if (/^https?:\/\//.test(line.trim())) return line;     // 純網址
     return convertHumanText(line, convert, [P_URL, P_HEX], languageTarget);
   }).join('\n');
+}
+
+/** 只分割目前巨集最外層的 ::，巢狀 {{macro::value}} 內的分隔符不動。 */
+function transformTopLevelMacroOptions(text, transformValue) {
+  let out = '';
+  let start = 0;
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text.startsWith('{{', i)) {
+      depth++;
+      i++;
+      continue;
+    }
+    if (depth > 0 && text.startsWith('}}', i)) {
+      depth--;
+      i++;
+      continue;
+    }
+    if (depth === 0 && text.startsWith('::', i)) {
+      out += transformValue(text.slice(start, i)) + '::';
+      i++;
+      start = i + 1;
+    }
+  }
+  return out + transformValue(text.slice(start));
 }
 
 /** 一般提示詞文字 */
@@ -1056,12 +1095,20 @@ function transformVariableMacros(text, transformIdentifier, transformValue) {
     const body = full.slice(2, -2);
     const writable = body.match(/^(\s*(?:setvar|setglobalvar|addvar|addglobalvar)\s*::\s*)([^:\r\n{}]+?)(\s*::)([\s\S]*)$/i);
     const reference = body.match(/^(\s*(?:getvar|getglobalvar|incvar|incglobalvar|decvar|decglobalvar)\s*::\s*)([^:\r\n{}]+?)(\s*)$/i);
+    const random = body.match(/^(\s*random\s*::)([\s\S]*)$/i);
+    const bare = body.match(/^(\s*)([^:{}\r\n]+?)(\s*)$/);
     if (writable) {
       // 同步轉換變數名稱與 value；所有分組原樣接回，不得 trim 任何空白。
       out += '{{' + writable[1] + transformIdentifier(writable[2]) + writable[3] + transformValue(writable[4]) + '}}';
     } else if (reference) {
       // 已知引用必須與 setvar 使用完全相同的轉換結果。
       out += '{{' + reference[1] + transformIdentifier(reference[2]) + reference[3] + '}}';
+    } else if (random) {
+      // random 的每個候選都是自然語句；保留命令與分隔符，只轉候選內容。
+      out += '{{' + random[1] + transformTopLevelMacroOptions(random[2], transformValue) + '}}';
+    } else if (bare && /[\u3400-\u9FFF]/.test(bare[2])) {
+      // {{小剧场名字}} 這類純中文 placeholder 在各處同步繁化；內建 ASCII 巨集不受影響。
+      out += '{{' + bare[1] + transformIdentifier(bare[2]) + bare[3] + '}}';
     } else {
       // 未知外層巨集保持原樣，但仍遞迴處理其中明確可辨識的變數巨集。
       out += '{{' + transformVariableMacros(body, transformIdentifier, transformValue) + '}}';
@@ -1071,13 +1118,38 @@ function transformVariableMacros(text, transformIdentifier, transformValue) {
   return out;
 }
 
+const STANDARD_MARKUP_TAGS = new Set([
+  'a', 'abbr', 'address', 'article', 'aside', 'audio', 'b', 'blockquote', 'body', 'br', 'button',
+  'canvas', 'caption', 'cite', 'code', 'col', 'colgroup', 'data', 'datalist', 'dd', 'del', 'details',
+  'dfn', 'dialog', 'div', 'dl', 'dt', 'em', 'fieldset', 'figcaption', 'figure', 'footer', 'form',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'head', 'header', 'hr', 'html', 'i', 'iframe', 'img',
+  'input', 'ins', 'kbd', 'label', 'legend', 'li', 'link', 'main', 'map', 'mark', 'menu', 'meta',
+  'meter', 'nav', 'noscript', 'object', 'ol', 'optgroup', 'option', 'output', 'p', 'picture', 'pre',
+  'progress', 'q', 'rp', 'rt', 'ruby', 's', 'samp', 'script', 'section', 'select', 'slot', 'small',
+  'source', 'span', 'strong', 'style', 'sub', 'summary', 'sup', 'table', 'tbody', 'td', 'template',
+  'textarea', 'tfoot', 'th', 'thead', 'time', 'title', 'tr', 'track', 'u', 'ul', 'var', 'video',
+  'svg', 'g', 'path', 'circle', 'ellipse', 'line', 'polygon', 'polyline', 'rect', 'text', 'defs',
+]);
+
+/**
+ * HTML/SVG 標籤本身維持不動；提示詞使用的自訂語意標籤則可轉換其中中文，
+ * 例如 <writing_style: 台湾乡愁>、<Puppy-God职责>。
+ */
+function transformPromptTags(text, transform) {
+  return text.replace(/<\/?([A-Za-z][\w-]*)([^<>]*)>/g, (tag, rawName) => {
+    if (STANDARD_MARKUP_TAGS.has(rawName.toLowerCase())) return tag;
+    return /[\u3400-\u9FFF]/.test(tag) ? transform(tag) : tag;
+  });
+}
+
 function convertPrompt(text, convert, languageTarget) {
   const withConvertedValues = transformVariableMacros(
     text,
     identifier => convert(identifier),
     value => convertPrompt(value, convert, languageTarget),
   );
-  return convertHumanText(withConvertedValues, convert, [P_URL, P_HEX, P_BRACKET, P_TAG], languageTarget);
+  const withConvertedPromptTags = transformPromptTags(withConvertedValues, convert);
+  return convertHumanText(withConvertedPromptTags, convert, [P_URL, P_HEX, P_BRACKET, P_TAG], languageTarget);
 }
 
 /** 關鍵詞在不同版本可能是陣列，也可能是逗號分隔字串；維持來源形狀與空白。 */
@@ -1538,9 +1610,20 @@ function isRegexFile(o) {
 const normalizeRegexFile = o =>
   Array.isArray(o) ? { list: o, single: false } : { list: [o], single: true };
 
-/* 比卡片內建正則的保護多了 P_TAG：{{getvar::變數名}} 這類巨集含中文，
-   被轉掉就查不到變數了。（卡片那條目前沒帶，是既有的漏洞。） */
-const RX_PROTECT = [P_URL, P_HEX, P_TAG, /<script[\s\S]*?<\/script>/gi];
+/* 程式碼區塊要先整段收走，否則先保護 <script>/<style> 標籤後就再也配不到結尾。 */
+const P_CODE_BLOCK = /<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+
+/* 比卡片內建正則的保護多了標籤與程式碼：class/id/CSS/JS 都不得被繁化。 */
+const RX_PROTECT = [P_CODE_BLOCK, P_URL, P_HEX, P_TAG];
+
+/** 只轉 HTML 中確定呈現給人的屬性，不碰 class、id、style、data-* 等程式欄位。 */
+function convertMarkupHumanAttributes(text, convert) {
+  return protectedConvert(text, visible => visible.replace(
+    /<\/?[A-Za-z][^<>]*>/g,
+    tag => tag.replace(/\b(aria-label|title|alt|placeholder|value)(\s*=\s*)(["'])([\s\S]*?)\3/gi,
+      (_all, name, equals, quote, value) => name + equals + quote + convert(value) + quote),
+  ), [P_CODE_BLOCK]);
+}
 
 /** 轉換一整包正則腳本。回傳 { list, changed }，形狀跟 convertCard 一致。 */
 function convertRegexFile(listIn, opts) {
@@ -1557,14 +1640,18 @@ function convertRegexFile(listIn, opts) {
     }
     for (const f of ['findRegex', 'replaceString']) {
       if (typeof r[f] === 'string' && r[f]) {
-        const v = protectedConvert(r[f], convert, RX_PROTECT);
+        const withHumanAttributes = convertMarkupHumanAttributes(r[f], convert);
+        const v = protectedConvert(withHumanAttributes,
+          value => repairConverterBoundaryMisses(convert(value), convert), RX_PROTECT);
         note(`${tag}｜${f}`, r[f], v); r[f] = v;
       }
     }
     if (Array.isArray(r.trimStrings)) {
       r.trimStrings = r.trimStrings.map((s, j) => {
         if (typeof s !== 'string' || !s) return s;
-        const v = protectedConvert(s, convert, RX_PROTECT);
+        const withHumanAttributes = convertMarkupHumanAttributes(s, convert);
+        const v = protectedConvert(withHumanAttributes,
+          value => repairConverterBoundaryMisses(convert(value), convert), RX_PROTECT);
         note(`${tag}｜trimStrings[${j}]`, s, v);
         return v;
       });
@@ -1629,6 +1716,12 @@ const PRESET_PROMPT_TITLE_FIELDS = ['name', 'title', 'display_name', 'label'];
 
 const presetPrompts = p => Array.isArray(p.prompts) ? p.prompts : [];
 
+/** 白白工具箱的預設分組是顯示資料；只轉 name，不碰 id、順序或提示詞關聯。 */
+function presetDisplayGroups(p) {
+  const groups = p?.extensions?.baibaiToolkit?.presetPromptGroups?.groups;
+  return Array.isArray(groups) ? groups : [];
+}
+
 function presetPromptTitleField(prompt) {
   for (const key of PRESET_PROMPT_TITLE_FIELDS) if (typeof prompt?.[key] === 'string' && prompt[key] !== '') return key;
   for (const key of PRESET_PROMPT_TITLE_FIELDS) if (typeof prompt?.[key] === 'string') return key;
@@ -1691,6 +1784,11 @@ function convertPreset(presetIn, opts) {
       const v = convertPrompt(pr.content, convert, languageTarget);
       note(`「${presetPromptTitle(pr)}」內容`, pr.content, v); pr.content = v;
     }
+  }
+  for (const group of presetDisplayGroups(p)) {
+    if (typeof group.name !== 'string' || !group.name) continue;
+    const v = convertPrompt(group.name, convert, languageTarget);
+    note('提示詞分組名稱', group.name, v); group.name = v;
   }
   const identifierMap = presetIdentifierConversionMap(p, convert);
   for (const pr of presetPrompts(p)) {
