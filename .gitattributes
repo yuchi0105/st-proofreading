@@ -1,0 +1,4 @@
+index.html text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.sha256 text eol=lf

@@ -49,6 +49,8 @@ function installDomStub(context) {
     createElement() { return makeElement(); },
     head: { appendChild() {} }, body: { appendChild() {} }, execCommand() { return true; },
   };
+  context.addEventListener = () => {};
+  context.MutationObserver = class { observe() {} };
   context.navigator = { clipboard: { async writeText() {} } };
   context.alert = () => {};
   context.confirm = () => true;
@@ -64,7 +66,9 @@ test('all inline scripts parse without rebuilding the OpenCC bundle', () => {
   }
   const marker = html.indexOf('OPENCC-BUNDLE:BEGIN');
   assert.notEqual(marker, -1);
-  const actual = crypto.createHash('sha256').update(html.slice(marker)).digest('hex').toUpperCase();
+  // 以 LF 計算，Windows（CRLF）與 Linux／macOS 的 checkout 才會得到同一個雜湊。
+  const bundle = html.slice(marker).replace(/\r\n/g, '\n');
+  const actual = crypto.createHash('sha256').update(bundle).digest('hex').toUpperCase();
   const expected = fs.readFileSync(path.join(here, 'opencc-bundle.sha256'), 'utf8').trim();
   assert.equal(actual, expected);
 });
