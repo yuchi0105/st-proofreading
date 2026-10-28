@@ -235,29 +235,108 @@ test('standalone regex scripts are visible, converted, editable, and keep unknow
   assert.deepEqual(exported[0].placement, [2]);
 });
 
-test('regex HTML converts visible attributes while preserving selectors, CSS, and JavaScript', () => {
+test('regex HTML keeps class names but converts CSS text and JavaScript consistently', () => {
   const context = makeContext();
   vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
   const core = context.STProofreadingCore;
   const convert = context.OpenCC.Converter({ from: 'cn', to: 'tw' });
-  const css = '<style>.简体类::before{content:"简体样式"}</style>';
-  const js = '<script>const 简体变量 = "简体脚本";</script>';
   const source = [{
     scriptName: '界面按钮',
     findRegex: '/切换主题/g',
-    replaceString: css
-      + '<button class="简体类" aria-label="切换日夜主题" title="$2内容">简体按钮</button>'
-      + js,
+    replaceString: '<style>.简体类::before{content:"简体样式"} .简体类{font-family:"宋体",serif} [data-s*=\'向阳\']{color:red}</style>'
+      + '<button class="简体类" data-s="向阳" aria-label="切换日夜主题" title="$2内容">简体按钮</button>'
+      + '<script>const 简体变量 = "简体脚本"; document.querySelector(".简体类").title = "提示"; // 注释\n</script>',
   }];
   const converted = core.convertRegexFile(source, { convert }).list[0];
 
   assert.equal(converted.findRegex, '/切換主題/g');
   assert.match(converted.replaceString, /class="简体类"/);
+  assert.match(converted.replaceString, /\.简体类::before\{content:"簡體樣式"\}/);
+  assert.match(converted.replaceString, /font-family:"宋体",serif/);
+  assert.match(converted.replaceString, /\[data-s\*='向陽'\]/);
+  assert.match(converted.replaceString, /data-s="向陽"/);
   assert.match(converted.replaceString, /aria-label="切換日夜主題"/);
   assert.match(converted.replaceString, /title="\$2內容"/);
   assert.match(converted.replaceString, />簡體按鈕<\/button>/);
-  assert.ok(converted.replaceString.startsWith(css));
-  assert.ok(converted.replaceString.endsWith(js));
+  assert.match(converted.replaceString, /const 簡體變量 = "簡體腳本"/);
+  assert.match(converted.replaceString, /querySelector\("\.简体类"\)/);
+  assert.match(converted.replaceString, /\/\/ 註釋/);
+});
+
+test('TavernHelper scripts convert with the worldbook while external names stay intact', () => {
+  const context = makeContext();
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  const core = context.STProofreadingCore;
+  const convert = context.OpenCC.Converter({ from: 'cn', to: 'tw' });
+  const card = {
+    spec: 'chara_card_v3',
+    creatorcomment: '需要的插件：酒馆助手',
+    data: {
+      name: '测试',
+      group_only_greetings: ['群聊开场'],
+      character_book: { entries: [
+        { comment: '[initvar]变量初始化', content: '角色:\n  紫藤阶段: Ⅰ·落地', keys: [] },
+        { comment: '手机-基本设置', content: '头像=https://a.example/1.png\n备注=测试备注\n类型=图片', keys: [] },
+      ] },
+      extensions: {
+        depth_prompt: { prompt: '请记住设定', depth: 4, role: 'system' },
+        tavern_helper: {
+          scripts: [
+            { type: 'script', name: 'MVU', content: "import 'https://cdn.example/mvu/bundle.js'",
+              button: { enabled: true, buttons: [{ name: '重新处理变量', visible: true }] },
+              data: { 是否显示变量更新错误: '是' } },
+            { type: 'folder', name: '界面脚本', scripts: [
+              { type: 'script', name: '变量结构',
+                content: "export const Schema = z.object({ 角色: z.object({ 紫藤阶段: z.enum(['Ⅰ·落地', 'Ⅱ·向阳']) }) });\n"
+                  + "eventOnButton('切换背景', () => toastr.info('已切换'));\n"
+                  + "const 头像 = line.startsWith('头像=');\n"
+                  + "el.style.fontFamily = '\"宋体\", serif';",
+                button: { enabled: true, buttons: [{ name: '切换背景', visible: true }] } },
+            ] },
+          ],
+          variables: { 好感度: 0, 状态: '开心' },
+        },
+        TavernHelper_scripts: [{ name: '旧版脚本', content: "const 提示 = '旧版内容';", buttons: [{ name: '旧版按钮', visible: true }] }],
+        some_plugin: { note: '未知插件的简体说明' },
+      },
+    },
+  };
+  const kindOf = entry => (/^手机-/.test(entry.comment) ? 'data' : 'prompt');
+  const { card: out, codeCtx } = core.convertCard(card, { convert, kindOf, languageTarget: 'traditional' });
+  const ext = out.data.extensions;
+  const [mvu, folder] = ext.tavern_helper.scripts;
+  const schema = folder.scripts[0];
+
+  assert.match(out.data.character_book.entries[0].content, /紫藤階段/);
+  assert.match(schema.content, /紫藤階段: z\.enum\(\['Ⅰ·落地', 'Ⅱ·向陽'\]\)/);
+  assert.equal(schema.name, '變量結構');
+  assert.equal(folder.name, '界面腳本');
+  // 卡片自己監聽的按鈕：名稱與程式一起轉換
+  assert.equal(schema.button.buttons[0].name, '切換背景');
+  assert.match(schema.content, /eventOnButton\('切換背景'/);
+  // 外部腳本（MVU）監聽的按鈕與設定鍵：保留
+  assert.equal(mvu.button.buttons[0].name, '重新处理变量');
+  assert.deepEqual([...Object.keys(mvu.data)], ['是否显示变量更新错误']);
+  assert.equal(mvu.content, "import 'https://cdn.example/mvu/bundle.js'");
+  // 資料條目的鍵名與字型名稱：保留
+  assert.match(schema.content, /startsWith\('头像='\)/);
+  assert.match(schema.content, /"宋体", serif/);
+  assert.match(out.data.character_book.entries[1].content, /^头像=/m);
+  // 舊版格式、變數、角色備註、V1／V3 欄位
+  assert.equal(ext.TavernHelper_scripts[0].content, "const 提示 = '舊版內容';");
+  assert.equal(ext.TavernHelper_scripts[0].buttons[0].name, '旧版按钮');
+  assert.equal(ext.tavern_helper.variables.狀態, '開心');
+  assert.equal(ext.depth_prompt.prompt, '請記住設定');
+  assert.match(out.creatorcomment, /需要的插件：酒館助手/);
+  assert.deepEqual([...out.data.group_only_greetings], ['群聊開場']);
+  assert.ok(codeCtx.keptLog.some(x => x.name === '重新处理变量'));
+
+  // 最後防線：只剩不認得的外掛附件，而且會被列進報告
+  const rows = core.findUnconvertedText(out, convert, codeCtx);
+  assert.deepEqual([...rows.map(r => r.path)], ['data.extensions.some_plugin.note']);
+  const issues = core.leftoverIssues(rows, codeCtx);
+  assert.ok(issues.some(i => i.level === 'warn' && i.title.includes('附件 extensions.some_plugin')));
+  assert.ok(issues.some(i => i.level === 'info' && i.detail.includes('重新处理变量')));
 });
 
 test('standalone worldbook keeps disable semantics and every unknown field', () => {

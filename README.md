@@ -18,7 +18,11 @@ Made by **YUCHI**
 - 預設的 `name`／`title`／`display_name`／`label` 都會作為可讀標題轉換；中文 identifier 會和 `prompt_order` 成套同步改名，撞名時則安全保留原值
 - 白白工具箱 `presetPromptGroups` 的可見分組名稱也會轉換，分組 ID、順序與提示詞關聯保持不變
 - 預設內嵌 `extensions.regex_scripts` 與獨立正則都會顯示在工作台，可編輯、開關與轉換 `scriptName`、`findRegex`、`replaceString`、`trimStrings`
-- 正則腳本可以單獨拖進來轉換（單一條或一整包都收）；HTML 的可見標籤文字與 `title`／`aria-label` 等人類可讀屬性會繁化，class／id／CSS／JavaScript／網址與色碼維持原樣
+- 正則腳本可以單獨拖進來轉換（單一條或一整包都收）；HTML 的可見文字、`title`／`aria-label` 等可讀屬性與 `data-*` 值會轉換，class／id、網址與色碼維持原樣
+- 程式碼也會轉換：酒館助手腳本、正則與開場白裡的 `<script>`／`<style>`，會把變數名、字串、註解、CSS 選擇器的比對值與世界書、AI 輸出用同一套字形轉換（例如 MVU 變數結構的鍵名會跟 `[initvar]` 條目一致）
+- 只保留「意義由卡片以外決定」的名稱：外部腳本（如 MVU）監聽的按鈕名與設定鍵、class／id、資料條目鍵名、`宋体` 等字型名稱；保留了哪些、為什麼，會列在校對報告
+- 支援酒館助手新舊格式（`tavern_helper`、資料夾、`TavernHelper_scripts`、腳本變數），以及角色備註（`depth_prompt`）、`creatorcomment`、V3 群聊開場白等欄位；預設內嵌的酒館助手腳本也會處理
+- 轉換後會掃過整份檔案（包含不認得的外掛附件），任何沒被轉換、也不屬於刻意保留的文字都會列進校對報告，不會被默默漏掉
 - `{{setvar::名稱::文字}}` 的多行文字會完整繁化，變數名稱也會與 `getvar`／`addvar`／`incvar`／`decvar` 及 global 版本同步轉換；`{{random::選項一::選項二}}` 會逐項繁化，`{{user}}`、`{{char}}` 等純控制巨集維持原樣
 - 自動分類條目：**資料**（腳本讀取，鍵名須維持簡體）／**提示詞**（AI 讀取，全部轉繁體）
 - 條目工作台：角色卡與獨立世界書都會顯示條目，支援搜尋／篩選、啟用狀態切換、行內編輯、單筆與全部還原
