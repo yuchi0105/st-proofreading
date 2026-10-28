@@ -432,6 +432,11 @@
   .confirm-item-title input{width:18px;height:18px;flex:none;accent-color:var(--pass)}
   .confirm-item>summary .term{color:var(--amber);font-weight:600}
   .confirm-item-body{padding:0 14px 14px}
+  .confirm-more{
+    display:block;width:100%;min-height:44px;padding:8px 14px;border:0;border-top:1px solid var(--rule);
+    background:var(--tint);color:var(--pass-ink);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer
+  }
+  .confirm-more:hover{background:var(--pass-soft)}
   .confirm-meta{font-size:12px;color:var(--soft);margin-bottom:5px}
   .confirm-context{padding:9px 11px;background:var(--field);border:1px solid var(--rule);border-radius:8px;font-size:13px;white-space:pre-wrap;word-break:break-word}
   .confirm-context mark{background:var(--mark);color:var(--ink);padding:0 2px;border-radius:3px}
@@ -1191,12 +1196,10 @@ function restoreEntryAmbiguities(card, stash) {
   if (!stash?.size) return;
   const data = card?.data || card || {};
   const entries = data.character_book?.entries || [];
-  const restore = text => {
-    if (typeof text !== 'string') return text;
-    let out = text;
-    for (const [token, value] of stash) out = out.split(token).join(value);
-    return out;
-  };
+  // 一次掃描就換回所有記號；逐一 split/join 每個記號在疑義詞多時會變成「文字數 × 記號數」。
+  const restore = text => typeof text === 'string'
+    ? text.replace(/\uE100A\d+Z\uE101/g, token => stash.has(token) ? stash.get(token) : token)
+    : text;
   entries.forEach(entry => {
     const nf = entryNameField(entry);
     entry[nf] = restore(entry[nf]);
@@ -2363,7 +2366,7 @@ let S = {
   srcName: '', srcBuf: null, chunks: null, hadCcv3: false, isPng: false,
   card: null, originalCard: null, originalSource: null, out: null, report: '',
   kinds: [], open: new Set(), statusFields: [], decisions: new Map(), ambiguities: [],
-  ambiguitySelection: new Set(), ambiguityOpen: new Set(),
+  ambiguitySelection: new Set(), ambiguityOpen: new Set(), ambiguityItemOpen: new Set(), ambiguityShown: new Map(),
   editing: null, editMode: false, filters: { search: '', status: 'all', kind: 'all', confirm: false, modified: false },
   previewConvert: null, lastRun: null, viewMode: 'work', outputSnapshot: null,
   presetOrderIndex: 0,
@@ -2395,6 +2398,12 @@ function loadOpenCC() {
   return openccReady;
 }
 
+function reportOpenCCFailure(e) {
+  console.error(e);
+  $('#runState').textContent = `內建繁簡詞庫載入失敗（${e?.message || e}），疑義詞預覽與繁簡轉換暫時無法使用。可改選「不轉換，只套用修正」，或重新下載完整的 index.html。`;
+  $('#runState').classList.remove('done');
+}
+
 /* ---------- 讀檔 ---------- */
 function bindDrop() {
   const d = $('#drop'), f = $('#file');
@@ -2408,6 +2417,11 @@ function bindDrop() {
   window.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
   window.addEventListener('dragenter', e => { if (hasFiles(e)) document.body.classList.add('dragging'); });
   window.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('dragging'); });
+  window.addEventListener('beforeunload', e => {
+    if (!hasWorkInProgress()) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
   window.addEventListener('drop', e => {
     if (!hasFiles(e)) return;
     e.preventDefault();
@@ -2419,7 +2433,10 @@ function bindDrop() {
 
 function hasWorkInProgress() {
   if (!S.srcBuf) return false;
-  if (S.out || editorIsDirty() || S.decisions?.size) return true;
+  if (editorIsDirty()) return true;
+  // 已下載過、之後也沒再改的結果不算「會遺失的成果」。
+  if (S.out) return S.exportedJson !== JSON.stringify(exportObj());
+  if (S.decisions?.size) return true;
   const now = S.kind === 'preset' ? S.preset : S.kind === 'regex' ? S.rx : S.card;
   const base = S.kind === 'preset' ? originalPreset() : S.kind === 'regex' ? originalRegex() : S.originalCard;
   return JSON.stringify(now) !== JSON.stringify(base);
@@ -2439,7 +2456,7 @@ async function load(file) {
     const buf = await file.arrayBuffer();
     S.srcBuf = buf;
     S.wb = null; S.uids = null; S.preset = null; S.rx = null; S.open = new Set();
-    S.decisions = new Map(); S.ambiguities = []; S.ambiguitySelection = new Set(); S.ambiguityOpen = new Set();
+    S.decisions = new Map(); S.ambiguities = []; S.ambiguitySelection = new Set(); S.ambiguityOpen = new Set(); S.ambiguityItemOpen = new Set(); S.ambiguityShown = new Map(); S.exportedJson = null;
     S.editing = null; S.editMode = false; S.previewConvert = null; S.lastRun = null; S.viewMode = 'work'; S.outputSnapshot = null; S.presetOrderIndex = 0;
     S.filters = { search: '', status: 'all', kind: 'all', confirm: false, modified: false };
     $('#entrySearch').value = '';
@@ -2483,8 +2500,7 @@ async function load(file) {
       if (S.card) refreshAmbiguities();
       renderEntries(); renderAmbiguities(); renderWorkbenchStatus(); renderApplySummary();
       renderReport(); renderFixes(); renderDirs();
-    })
-                .catch(() => {});
+    }).catch(reportOpenCCFailure);
     $('#outsec').classList.add('hidden');
     $('#dlPng').classList.toggle('hidden', !S.isPng);
     $('#log').classList.add('hidden');
@@ -2849,11 +2865,18 @@ function renderBookEntries() {
   $('#enttools').classList.toggle('hidden', !es.length);
   if (!es.length) { $('#entries').innerHTML = '<div class="ent"><span class="nm">這個檔案沒有世界書條目。</span></div>'; return; }
   const currentIssues = validate(displayedCard(), kindOf).issues;
+  const ambByEntry = new Map();
+  for (const x of S.ambiguities) {
+    const row = ambByEntry.get(x.entryIndex) || { total: 0, open: 0 };
+    row.total++;
+    if (!S.decisions.has(x.id)) row.open++;
+    ambByEntry.set(x.entryIndex, row);
+  }
   const visible = es.map((e, i) => ({ e, i })).filter(({ e, i }) => {
     const f = S.filters;
     const enabled = entryEnabledAt(i, e);
     const haystack = [entryLabel(e), e.content || '', ...keyList(e), ...keyList(e, true)].join('\n').toLocaleLowerCase();
-    const hasConfirm = S.ambiguities.some(x => x.entryIndex === i && !S.decisions.has(x.id));
+    const hasConfirm = !!ambByEntry.get(i)?.open;
     if (f.search && !haystack.includes(f.search.toLocaleLowerCase())) return false;
     if (f.status === 'enabled' && !enabled) return false;
     if (f.status === 'disabled' && enabled) return false;
@@ -2870,7 +2893,7 @@ function renderBookEntries() {
     const why = classifyEntry(e).reason;
     const open = S.open.has(i);
     const enabled = entryEnabledAt(i, e);
-    const ambCount = S.ambiguities.filter(x => x.entryIndex === i).length;
+    const ambCount = ambByEntry.get(i)?.total || 0;
     const issueCount = currentIssues.filter(x => `${x.title}\n${x.detail}`.includes(entryLabel(e))).length;
     const changed = displayedEntryContentChangedAt(i) || displayedEntryStatusChangedAt(i);
     return `<div class="ent-wrap ${enabled ? '' : 'is-off'}"><div class="ent">
@@ -3420,7 +3443,12 @@ function bindEntryTools() {
     S.editing = null;
     updateViewSwitch(); renderCurrentMeta(); renderEntries(); renderWorkbenchStatus(); renderApplySummary(); renderPresetOrderTools();
   }));
-  $('#entrySearch').addEventListener('input', e => { S.filters.search = e.target.value; renderEntries(); });
+  let searchTimer = null;
+  $('#entrySearch').addEventListener('input', e => {
+    S.filters.search = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(renderEntries, 150);
+  });
   $('#entryFilters').querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
     const type = button.dataset.filter, value = button.dataset.value;
     if (type === 'status' && value === 'all') {
@@ -3581,33 +3609,10 @@ function aiPromptFor(occurrence) {
   ].join('\n');
 }
 
-function renderAmbiguities() {
-  const box = $('#ambiguities');
-  const list = S.ambiguities || [];
-  if (!list.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
-  box.classList.remove('hidden');
-  const unresolved = unresolvedAmbiguities().length;
-  box.classList.toggle('has-unresolved', !!unresolved);
-  const groups = ambiguityGroups(list);
-  box.innerHTML = `<summary class="confirm-head"><span class="confirm-head-main"><span class="confirm-head-text"><b>需要再次確認・依詞彙分組</b><small>點開後可逐處選擇候選詞，或整組批次處理</small></span></span><span class="mini-badge ${unresolved ? 'hot' : ''}">${unresolved ? `尚有 ${unresolved} 處` : '全部已處理'}</span></summary><div class="confirm-list">`
-    + groups.map(({ rule, items }) => {
-      const groupUnresolved = items.filter(x => !S.decisions.has(x.id)).length;
-      const selected = items.filter(x => S.ambiguitySelection.has(x.id)).length;
-      return `<details class="confirm-group" data-rule-group="${esc(rule.id)}" ${S.ambiguityOpen.has(rule.id) ? 'open' : ''}>
-        <summary><span>${esc(rule.label || items[0].original)}</span><span><span class="mini-badge ${groupUnresolved ? 'hot' : ''}">${groupUnresolved ? `待確認 ${groupUnresolved}` : '已處理'}</span> <span class="mini-badge">共 ${items.length}</span></span></summary>
-        <div class="confirm-group-tools">
-          <label class="group-select"><input type="checkbox" data-amb-select-group="${esc(rule.id)}">勾選本組全部 <span>（已勾 ${selected}）</span></label>
-          <button type="button" data-amb-bulk-action="keep" data-rule-id="${esc(rule.id)}">批次保留原詞</button>
-          ${(rule.candidates || items[0].candidates).map(value => `<button type="button" data-amb-bulk-action="candidate" data-rule-id="${esc(rule.id)}" data-value="${esc(value)}">批次套用：${esc(value)}</button>`).join('')}
-        </div>
-        ${items.map(x => {
-          const d = S.decisions.get(x.id);
-          const label = entryLabel(entriesOf()[x.entryIndex] || {});
-          const decisionText = d ? (d.action === 'keep' ? '保留原詞' : d.value) : '待確認';
-          return `<details class="confirm-item" data-occurrence="${esc(x.id)}">
-            <summary><span class="confirm-item-title"><input type="checkbox" data-amb-select="${esc(x.id)}" ${S.ambiguitySelection.has(x.id) ? 'checked' : ''} aria-label="勾選這一處"><span>${esc(label)}・<span class="term">${esc(x.original)}</span></span></span><span>${esc(decisionText)}</span></summary>
-            <div class="confirm-item-body">
-            <div class="confirm-meta">${esc(label)}・${x.field === 'content' ? '正文' : '名稱'}・${esc(x.description)}</div>
+function ambiguityItemBody(x) {
+  const d = S.decisions.get(x.id);
+  const label = entryLabel(entriesOf()[x.entryIndex] || {});
+  return `<div class="confirm-meta">${esc(label)}・${x.field === 'content' ? '正文' : '名稱'}・${esc(x.description)}</div>
             <div class="confirm-context">${esc(x.before)}<mark>${esc(x.original)}</mark>${esc(x.after)}</div>
             <div class="confirm-meta" style="margin-top:6px">原文：<b>${esc(x.original)}</b>　自動繁化可能結果：<b>${esc(x.converted)}</b></div>
             <div class="confirm-candidates">
@@ -3616,42 +3621,118 @@ function renderAmbiguities() {
               <span class="custom-choice"><input type="text" class="custom-value" value="${d?.action === 'custom' ? esc(d.value) : ''}" placeholder="自訂詞"><button type="button" data-amb-action="custom" data-id="${esc(x.id)}" class="${d?.action === 'custom' ? 'selected' : ''}">採用自訂</button></span>
               <button type="button" data-amb-action="copy-ai" data-id="${esc(x.id)}">複製 AI 判斷內容</button>
             </div>
-            <div class="ai-note">AI 輔助目前不會連線；只複製這一筆局部語境與候選詞，由你貼到慣用的 AI。結果不會自動改字。</div>
-            </div>
+            <div class="ai-note">AI 輔助目前不會連線；只複製這一筆局部語境與候選詞，由你貼到慣用的 AI。結果不會自動改字。</div>`;
+}
+
+const AMBIGUITY_PAGE = 100;
+
+function ambiguityItemsHtml(items, ruleId) {
+  const entries = entriesOf();
+  const shown = Math.min(items.length, S.ambiguityShown.get(ruleId) || AMBIGUITY_PAGE);
+  const rest = items.length - shown;
+  return items.slice(0, shown).map(x => {
+    const d = S.decisions.get(x.id);
+    const label = entryLabel(entries[x.entryIndex] || {});
+    const decisionText = d ? (d.action === 'keep' ? '保留原詞' : d.value) : '待確認';
+    const open = S.ambiguityItemOpen.has(x.id);
+    return `<details class="confirm-item" data-occurrence="${esc(x.id)}" ${open ? 'open' : ''}>
+            <summary><span class="confirm-item-title"><input type="checkbox" data-amb-select="${esc(x.id)}" ${S.ambiguitySelection.has(x.id) ? 'checked' : ''} aria-label="勾選這一處"><span>${esc(label)}・<span class="term">${esc(x.original)}</span></span></span><span>${esc(decisionText)}</span></summary>
+            <div class="confirm-item-body">${open ? ambiguityItemBody(x) : ''}</div>
           </details>`;
-        }).join('')}
+  }).join('') + (rest > 0
+    ? `<button type="button" class="confirm-more" data-amb-more="${esc(ruleId)}">再顯示 ${Math.min(rest, AMBIGUITY_PAGE)} 處（尚有 ${rest} 處）</button>`
+    : '');
+}
+
+/* 疑義詞可能有上千處：分組收合時不產生內容、單筆收合時不產生按鈕區，事件一律委派給外框。 */
+function renderAmbiguities() {
+  const box = $('#ambiguities');
+  const list = S.ambiguities || [];
+  if (!list.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  box.classList.remove('hidden');
+  bindAmbiguityBox(box);
+  const unresolved = unresolvedAmbiguities().length;
+  box.classList.toggle('has-unresolved', !!unresolved);
+  const groups = ambiguityGroups(list);
+  const scroll = box.querySelector('.confirm-list')?.scrollTop || 0;
+  box.innerHTML = `<summary class="confirm-head"><span class="confirm-head-main"><span class="confirm-head-text"><b>需要再次確認・依詞彙分組</b><small>點開後可逐處選擇候選詞，或整組批次處理</small></span></span><span class="mini-badge ${unresolved ? 'hot' : ''}">${unresolved ? `尚有 ${unresolved} 處` : '全部已處理'}</span></summary><div class="confirm-list">`
+    + groups.map(({ rule, items }) => {
+      const groupUnresolved = items.filter(x => !S.decisions.has(x.id)).length;
+      const selected = items.filter(x => S.ambiguitySelection.has(x.id)).length;
+      const open = S.ambiguityOpen.has(rule.id);
+      return `<details class="confirm-group" data-rule-group="${esc(rule.id)}" ${open ? 'open' : ''}>
+        <summary><span>${esc(rule.label || items[0].original)}</span><span><span class="mini-badge ${groupUnresolved ? 'hot' : ''}">${groupUnresolved ? `待確認 ${groupUnresolved}` : '已處理'}</span> <span class="mini-badge">共 ${items.length}</span></span></summary>
+        <div class="confirm-group-tools">
+          <label class="group-select"><input type="checkbox" data-amb-select-group="${esc(rule.id)}" ${selected && selected === items.length ? 'checked' : ''}>勾選本組全部 <span>（已勾 ${selected}）</span></label>
+          <button type="button" data-amb-bulk-action="keep" data-rule-id="${esc(rule.id)}">批次保留原詞</button>
+          ${(rule.candidates || items[0].candidates).map(value => `<button type="button" data-amb-bulk-action="candidate" data-rule-id="${esc(rule.id)}" data-value="${esc(value)}">批次套用：${esc(value)}</button>`).join('')}
+        </div>
+        <div class="confirm-items">${open ? ambiguityItemsHtml(items, rule.id) : ''}</div>
       </details>`;
     }).join('') + '</div>';
-
-  box.querySelectorAll('.confirm-group').forEach(group => group.addEventListener('toggle', () => {
-    const id = group.dataset.ruleGroup;
-    if (group.open) S.ambiguityOpen.add(id); else S.ambiguityOpen.delete(id);
-  }));
-  box.querySelectorAll('input[data-amb-select]').forEach(input => {
-    input.addEventListener('click', event => event.stopPropagation());
-    input.addEventListener('change', () => {
-      selectAmbiguities([input.dataset.ambSelect], input.checked);
-      renderAmbiguities();
-    });
-  });
   box.querySelectorAll('input[data-amb-select-group]').forEach(input => {
     const id = input.dataset.ambSelectGroup;
     const items = list.filter(x => x.ruleId === id);
     const n = items.filter(x => S.ambiguitySelection.has(x.id)).length;
-    input.checked = !!items.length && n === items.length;
     input.indeterminate = n > 0 && n < items.length;
-    input.addEventListener('change', () => {
-      selectAmbiguities(items.map(x => x.id), input.checked);
+  });
+  const listEl = box.querySelector('.confirm-list');
+  if (listEl && scroll) listEl.scrollTop = scroll;
+}
+
+let ambiguityBoxBound = false;
+function bindAmbiguityBox(box) {
+  if (ambiguityBoxBound) return;
+  ambiguityBoxBound = true;
+  const findOccurrence = id => S.ambiguities.find(item => item.id === id);
+  // toggle 事件不會冒泡，所以用捕獲階段接住每一個 <details>。
+  box.addEventListener('toggle', event => {
+    const el = event.target;
+    if (el.classList?.contains('confirm-group')) {
+      const id = el.dataset.ruleGroup;
+      if (el.open) {
+        S.ambiguityOpen.add(id);
+        const slot = el.querySelector('.confirm-items');
+        if (slot && !slot.childElementCount) slot.innerHTML = ambiguityItemsHtml(S.ambiguities.filter(x => x.ruleId === id), id);
+      } else S.ambiguityOpen.delete(id);
+    } else if (el.classList?.contains('confirm-item')) {
+      const id = el.dataset.occurrence;
+      if (el.open) {
+        S.ambiguityItemOpen.add(id);
+        const body = el.querySelector('.confirm-item-body'), x = findOccurrence(id);
+        if (body && x && !body.childElementCount) body.innerHTML = ambiguityItemBody(x);
+      } else S.ambiguityItemOpen.delete(id);
+    }
+  }, true);
+  box.addEventListener('change', event => {
+    const input = event.target;
+    if (input.dataset?.ambSelect) {
+      selectAmbiguities([input.dataset.ambSelect], input.checked);
+      renderAmbiguities();
+    } else if (input.dataset?.ambSelectGroup) {
+      const id = input.dataset.ambSelectGroup;
+      selectAmbiguities(S.ambiguities.filter(x => x.ruleId === id).map(x => x.id), input.checked);
       S.ambiguityOpen.add(id);
       renderAmbiguities();
-    });
+    }
   });
-  box.querySelectorAll('[data-amb-bulk-action]').forEach(button => button.addEventListener('click', () => {
-    const count = applyAmbiguityBulk(button.dataset.ruleId, button.dataset.ambBulkAction, button.dataset.value);
-    if (!count) alert('請先勾選要批次處理的位置。');
-  }));
-  box.querySelectorAll('[data-amb-action]').forEach(button => button.addEventListener('click', async () => {
-    const x = S.ambiguities.find(item => item.id === button.dataset.id);
+  box.addEventListener('click', async event => {
+    const more = event.target.closest?.('[data-amb-more]');
+    if (more) {
+      const id = more.dataset.ambMore;
+      S.ambiguityShown.set(id, (S.ambiguityShown.get(id) || AMBIGUITY_PAGE) + AMBIGUITY_PAGE);
+      renderAmbiguities();
+      return;
+    }
+    const bulk = event.target.closest?.('[data-amb-bulk-action]');
+    if (bulk) {
+      const count = applyAmbiguityBulk(bulk.dataset.ruleId, bulk.dataset.ambBulkAction, bulk.dataset.value);
+      if (!count) alert('請先勾選要批次處理的位置。');
+      return;
+    }
+    const button = event.target.closest?.('[data-amb-action]');
+    if (!button) return;
+    const x = findOccurrence(button.dataset.id);
     if (!x) return;
     const action = button.dataset.ambAction;
     if (action === 'keep') setAmbiguityDecision(x.id, { action: 'keep', value: x.original });
@@ -3666,7 +3747,7 @@ function renderAmbiguities() {
       button.textContent = '已複製';
       setTimeout(() => { if (button.isConnected) button.textContent = '複製 AI 判斷內容'; }, 1400);
     }
-  }));
+  });
 }
 
 function shortDiffText(value) {
@@ -3915,7 +3996,7 @@ function renderDirs() {
     loadOpenCC().then(OC => {
       S.previewConvert = OC.Converter({ from: d.from, to: d.to });
       refreshAmbiguities(); renderAmbiguities(); renderEntries();
-    }).catch(() => {});
+    }).catch(reportOpenCCFailure);
   };
   upd();
   if (S.card) {
@@ -3924,7 +4005,7 @@ function renderDirs() {
     else loadOpenCC().then(OC => {
       S.previewConvert = OC.Converter({ from: d.from, to: d.to });
       refreshAmbiguities(); renderAmbiguities(); renderEntries();
-    }).catch(() => {});
+    }).catch(reportOpenCCFailure);
   }
 }
 
@@ -4146,10 +4227,12 @@ function bindExports() {
     if (!S.isPng) return alert('這次載入的是 JSON，沒有可以寫回的 PNG。請用「下載 JSON」。');
     const bytes = buildPng(S.chunks, S.out || S.card, S.hadCcv3);
     save(new Blob([bytes], { type: 'image/png' }), outName('_校對.png'));
+    S.exportedJson = JSON.stringify(exportObj());
   });
   $('#dlJson').addEventListener('click', () => {
     const j = JSON.stringify(exportObj(), null, 2);
     save(new Blob([j], { type: 'application/json' }), outName('_校對.json'));
+    S.exportedJson = JSON.stringify(exportObj());
   });
   $('#dlRep').addEventListener('click', () => {
     save(new Blob([S.report || '（尚未執行）'], { type: 'text/plain;charset=utf-8' }), outName('_校對報告.txt'));
