@@ -1371,21 +1371,30 @@ const STANDARD_MARKUP_TAGS = new Set([
  * HTML/SVG 標籤本身維持不動；提示詞使用的自訂語意標籤則可轉換其中中文，
  * 例如 <writing_style: 台湾乡愁>、<Puppy-God职责>。
  */
-function transformPromptTags(text, transform) {
+function transformPromptTags(text, transform, codeCtx) {
   return text.replace(/<\/?([A-Za-z][\w-]*)([^<>]*)>/g, (tag, rawName) => {
-    if (STANDARD_MARKUP_TAGS.has(rawName.toLowerCase())) return tag;
+    if (STANDARD_MARKUP_TAGS.has(rawName.toLowerCase())) return codeCtx ? convertTagAttributes(tag, codeCtx) : tag;
     return /[\u3400-\u9FFF]/.test(tag) ? transform(tag) : tag;
   });
 }
 
-function convertPrompt(text, convert, languageTarget) {
+/** codeCtx 由整張卡共用，讓提示詞裡的 <script>／<style> 跟腳本、正則採用同一份保留名單。 */
+function convertPrompt(text, convert, languageTarget, codeCtx) {
+  if (typeof text !== 'string' || !text) return text;
+  const ctx = codeCtx || createCodeContext(convert, { languageTarget });
+  const blocks = [];
+  const masked = text.replace(P_CODE_BLOCK, block => {
+    blocks.push(convertMarkup(block, ctx));
+    return '\uE400' + (blocks.length - 1) + '\uE401';
+  });
   const withConvertedValues = transformVariableMacros(
-    text,
+    masked,
     identifier => convert(identifier),
-    value => convertPrompt(value, convert, languageTarget),
+    value => convertPrompt(value, convert, languageTarget, ctx),
   );
-  const withConvertedPromptTags = transformPromptTags(withConvertedValues, convert);
-  return convertHumanText(withConvertedPromptTags, convert, [P_URL, P_HEX, P_BRACKET, P_TAG], languageTarget);
+  const withConvertedPromptTags = transformPromptTags(withConvertedValues, convert, ctx);
+  const converted = convertHumanText(withConvertedPromptTags, convert, [P_URL, P_HEX, P_BRACKET, P_TAG], languageTarget);
+  return blocks.length ? converted.replace(/\uE400(\d+)\uE401/g, (_, k) => blocks[+k]) : converted;
 }
 
 /** 關鍵詞在不同版本可能是陣列，也可能是逗號分隔字串；維持來源形狀與空白。 */
@@ -1398,6 +1407,557 @@ function convertKeywordValue(raw, convert) {
     return match ? match[1] + convert(match[2]) + match[3] : convert(part);
   }).join('');
 }
+
+/* ---------- 程式碼與附件：整張卡一致轉換 ----------
+   腳本、正則裡的 JS／CSS 也有大量中文：MVU 變數結構的鍵名、比對 AI 輸出的正則、
+   顯示用文字、[data-s*='向阳'] 這類選擇器。它們必須跟世界書與 AI 輸出用同一套字形，
+   只轉一邊就會「時好時壞」。所以程式碼也要轉，只留下「意義由卡片以外決定」的名稱：
+   class／id、資料條目鍵名、外部腳本監聽的按鈕名與設定鍵、字型名稱。               */
+const CJK_CHAR = /[\u3400-\u9FFF\uF900-\uFAFF]/;
+const JS_ID_START = /[\p{ID_Start}$_]/u;
+const JS_ID_PART = /[\p{ID_Continue}$\u200C\u200D]/u;
+const JS_BEFORE_EXPRESSION = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void',
+  'throw', 'case', 'do', 'else', 'yield', 'await']);
+// 切分「名稱片段」用的分隔符；「-」與「_」屬於名稱本身（手机-角色、简体_类）。
+const CODE_SEGMENT_SPLIT = /([\s.#\[\]=:'"`,>+~()*^$|\\\/{};!?&@%<]+)/;
+// 中文字型名稱一旦繁化就對不到系統字型（宋體 ≠ 宋体），只要是字型清單裡的名稱就保留。
+const CJK_FONT_NAME = /^(?:[\u3400-\u9FFF]{0,6})(?:(?:宋|黑|楷|仿宋|雅黑|正黑|圆|圓|明|姚|舒|细黑|細黑|中黑|中宋|粗宋|标宋|標宋)(?:体|體)|隶书|隸書|幼圆|幼圓|行楷|等线|等線|苹方|蘋方|魏碑|新魏|彩云|彩雲|琥珀)(?:\s+[\w-]+)*$/;
+const TEMPLATE_MARK = k => '\uE200' + k + '\uE201';
+
+/** 依卡片內容建立轉換情境：哪些名稱必須原樣保留，以及各類程式片段的轉換方式。 */
+function createCodeContext(convert, options = {}) {
+  const normalize = s => (NORM ? NORM(s) : s);
+  const keep = new Map();
+  const keptLog = [];
+  const ctx = {
+    convert,
+    languageTarget: options.languageTarget || null,
+    referenced: new Set(),
+    keptLog,
+    keep(name, reason) {
+      if (typeof name !== 'string' || !CJK_CHAR.test(name)) return;
+      const key = normalize(name);
+      if (keep.has(key)) return;
+      keep.set(key, name);
+      if (reason) keptLog.push({ name, reason });
+    },
+    keptFor: segment => keep.get(normalize(segment)),
+    isReferenced: name => typeof name === 'string' && (ctx.referenced.has(name) || ctx.referenced.has(normalize(name))),
+    text: value => convertHumanText(value, convert, [P_URL, P_HEX]),
+    literal: body => convertCodeLiteral(body, ctx),
+    segments: value => convertCodeSegments(value, ctx),
+    identifier: word => ctx.keptFor(word) ?? convert(word),
+  };
+  return ctx;
+}
+
+/** 只蒐集、不改寫：記下所有字串字面量，用來判斷按鈕名、設定鍵有沒有被卡片自己的程式引用。 */
+function collectCodeReferences(ctx, code) {
+  const record = body => {
+    if (!CJK_CHAR.test(body)) return body;
+    ctx.referenced.add(body);
+    if (NORM) ctx.referenced.add(NORM(body));
+    for (const part of body.split(CODE_SEGMENT_SPLIT)) if (CJK_CHAR.test(part)) {
+      ctx.referenced.add(part);
+      if (NORM) ctx.referenced.add(NORM(part));
+    }
+    return body;
+  };
+  transformJs(code, { literal: record, segments: record, identifier: w => w, text: t => t });
+}
+
+/** class、id 與選擇器裡的中文名稱：HTML 與 CSS 都保持原樣，程式裡引用它們的地方也必須一致。 */
+function collectMarkupNames(ctx, text) {
+  if (typeof text !== 'string' || !CJK_CHAR.test(text)) return;
+  const add = raw => {
+    for (const token of String(raw).split(/\s+/)) {
+      if (!token || /[${}]/.test(token)) continue;
+      ctx.keep(token, 'class／id 名稱，HTML 與 CSS 都維持原樣');
+    }
+  };
+  let m;
+  const attr = /\b(?:class|id|for)\s*=\s*(\\?["'])([\s\S]*?)\1/gi;
+  while ((m = attr.exec(text))) add(m[2]);
+  const dom = /(?:className|\.id)\s*=\s*(["'`])([^"'`]*)\1|classList\.(?:add|remove|toggle|contains|replace)\(\s*(["'`])([^"'`]*)\3|getElementById\(\s*(["'`])([^"'`]*)\5|getElementsByClassName\(\s*(["'`])([^"'`]*)\7/g;
+  while ((m = dom.exec(text))) add(m[2] ?? m[4] ?? m[6] ?? m[8]);
+  const selectorArg = /(?:querySelector(?:All)?|closest|matches|\$)\(\s*(["'`])([^"'`]*)\1/g;
+  const selectorName = /[.#](-?[\w\u00A0-\uFFFF-]*[\u3400-\u9FFF\uF900-\uFAFF][\w\u00A0-\uFFFF-]*)/g;
+  while ((m = selectorArg.exec(text))) {
+    let s;
+    while ((s = selectorName.exec(m[2]))) add(s[1]);
+  }
+  const style = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
+  while ((m = style.exec(text))) {
+    const css = m[1].replace(/\/\*[\s\S]*?\*\//g, '').replace(/(["'])(?:\\.|(?!\1)[^\\])*\1/g, '');
+    let s;
+    while ((s = selectorName.exec(css))) add(s[1]);
+  }
+}
+
+function isCjkFontName(value) {
+  return CJK_FONT_NAME.test(String(value).trim().replace(/^["']|["']$/g, ''));
+}
+
+/** 名稱片段逐一判斷：保留名單、字型照舊，其餘中文照常轉換。沒有任何特例時整段一起轉，維持詞組語境。 */
+function convertCodeSegments(value, ctx) {
+  if (!CJK_CHAR.test(value)) return value;
+  const parts = value.split(CODE_SEGMENT_SPLIT);
+  let special = false;
+  const fixed = parts.map((part, k) => {
+    if (k % 2 || !CJK_CHAR.test(part)) return null;
+    const kept = ctx.keptFor(part);
+    if (kept != null) { special = true; return kept; }
+    if (isCjkFontName(part)) { special = true; return part; }
+    return null;
+  });
+  const convert = text => repairConverterBoundaryMisses(ctx.convert(text), ctx.convert);
+  if (!special) return convert(value);
+  return parts.map((part, k) => fixed[k] ?? (k % 2 || !CJK_CHAR.test(part) ? part : convert(part))).join('');
+}
+
+/** 字串字面量：含 HTML 就依標籤規則處理，否則視為名稱片段（網址不動）。 */
+function convertCodeLiteral(body, ctx) {
+  if (!CJK_CHAR.test(body)) return body;
+  if (/<\/?[A-Za-z][\w:-]*[\s>\/]/.test(body)) return convertMarkup(body, ctx);
+  return protectedConvert(body, inner => convertCodeSegments(inner, ctx), [P_URL]);
+}
+
+/**
+ * 掃過 JavaScript 原始碼，把註解、字串、樣板字串、正則字面量、識別字分開處理。
+ * 所有改寫都只替換中文字本身，不增刪任何 ASCII 符號，所以即使遇到不常見的語法誤判，
+ * 也不會讓程式結構壞掉。
+ */
+function transformJs(src, ctx, start = 0, stopAtBrace = false) {
+  let out = '';
+  let i = start;
+  let depth = 0;
+  let prev = 'op';
+  const n = src.length;
+  while (i < n) {
+    const c = src[i], d = src[i + 1];
+    if (c === '/' && d === '/') {
+      const j = src.indexOf('\n', i);
+      const end = j < 0 ? n : j;
+      out += ctx.text(src.slice(i, end));
+      i = end;
+      continue;
+    }
+    if (c === '/' && d === '*') {
+      const j = src.indexOf('*/', i + 2);
+      const end = j < 0 ? n : j + 2;
+      out += ctx.text(src.slice(i, end));
+      i = end;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < n && src[j] !== c && src[j] !== '\n') j += src[j] === '\\' ? 2 : 1;
+      const closed = j < n && src[j] === c;
+      out += c + ctx.literal(src.slice(i + 1, Math.min(j, n))) + (closed ? c : '');
+      i = closed ? j + 1 : Math.min(j, n);
+      prev = 'value';
+      continue;
+    }
+    if (c === '`') {
+      const r = transformTemplate(src, i, ctx);
+      out += r.text;
+      i = r.end;
+      prev = 'value';
+      continue;
+    }
+    if (c === '/' && prev === 'op') {
+      let j = i + 1, inClass = false;
+      while (j < n && src[j] !== '\n') {
+        if (src[j] === '\\') { j += 2; continue; }
+        if (src[j] === '[') inClass = true;
+        else if (src[j] === ']') inClass = false;
+        else if (src[j] === '/' && !inClass) break;
+        j++;
+      }
+      if (j < n && src[j] === '/') {
+        let k = j + 1;
+        while (k < n && /[a-z]/i.test(src[k])) k++;
+        out += '/' + ctx.segments(src.slice(i + 1, j)) + src.slice(j, k);
+        i = k;
+        prev = 'value';
+        continue;
+      }
+    }
+    if (JS_ID_START.test(c)) {
+      let j = i + 1;
+      while (j < n && JS_ID_PART.test(src[j])) j++;
+      const word = src.slice(i, j);
+      out += CJK_CHAR.test(word) ? ctx.identifier(word) : word;
+      prev = JS_BEFORE_EXPRESSION.has(word) ? 'op' : 'value';
+      i = j;
+      continue;
+    }
+    if (/\d/.test(c)) {
+      let j = i + 1;
+      while (j < n && /[\w.]/.test(src[j])) j++;
+      out += src.slice(i, j);
+      i = j;
+      prev = 'value';
+      continue;
+    }
+    if (/\s/.test(c)) { out += c; i++; continue; }
+    if (stopAtBrace) {
+      if (c === '{') depth++;
+      else if (c === '}') {
+        if (depth === 0) return { text: out, end: i };
+        depth--;
+      }
+    }
+    out += c;
+    i++;
+    prev = c === ')' || c === ']' || c === '}' ? 'value' : 'op';
+  }
+  return { text: out, end: i };
+}
+
+/** 樣板字串：${} 先換成占位符，整段當一個字面量轉換，HTML 片段才不會被運算式切斷。 */
+function transformTemplate(src, start, ctx) {
+  const chunks = [], expressions = [];
+  let buf = '', j = start + 1, closed = false;
+  while (j < src.length) {
+    const c = src[j];
+    if (c === '\\') { buf += src.slice(j, j + 2); j += 2; continue; }
+    if (c === '`') { closed = true; j++; break; }
+    if (c === '$' && src[j + 1] === '{') {
+      chunks.push(buf); buf = '';
+      const r = transformJs(src, ctx, j + 2, true);
+      expressions.push(r.text);
+      j = r.end + 1;
+      continue;
+    }
+    buf += c;
+    j++;
+  }
+  chunks.push(buf);
+  const joined = chunks.map((text, k) => k < expressions.length ? text + TEMPLATE_MARK(k) : text).join('');
+  const converted = ctx.literal(joined)
+    .replace(/\uE200(\d+)\uE201/g, (_, k) => '${' + expressions[+k] + '}');
+  return { text: '`' + converted + (closed ? '`' : ''), end: j };
+}
+
+/** CSS：字型宣告與 url() 不動；註解、字串、選擇器裡的中文名稱依一致規則處理。 */
+function convertCss(css, ctx) {
+  if (!CJK_CHAR.test(css)) return css;
+  return css.replace(
+    /\/\*[\s\S]*?\*\/|font(?:-family)?\s*:[^;{}]*|url\(\s*[^)]*\)|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s"'\/{}:;,()\[\]>+~*=^$|.#@!]*[\u3400-\u9FFF\uF900-\uFAFF][^\s"'\/{}:;,()\[\]>+~*=^$|.#@!]*/gi,
+    m => {
+      if (m.startsWith('/*')) return ctx.text(m);
+      if (/^(?:font|url\()/i.test(m)) return m;
+      if (m[0] === '"' || m[0] === "'") return m[0] + ctx.literal(m.slice(1, -1)) + m[0];
+      return ctx.identifier(m);
+    });
+}
+
+const HUMAN_ATTRIBUTES = /^(?:aria-label|aria-description|aria-placeholder|aria-roledescription|title|alt|placeholder|value|label|summary)$/i;
+
+/** 單一標籤：給人看的屬性照常轉，style 走 CSS、on* 走 JS、data-* 依名稱規則；class、id、href 等不動。 */
+function convertTagAttributes(tag, ctx) {
+  if (!CJK_CHAR.test(tag)) return tag;
+  const head = tag.match(/^<\/?[A-Za-z][\w:-]*/);
+  if (!head) return tag;
+  const rest = tag.slice(head[0].length).replace(
+    /([^\s=<>\/"']+)(\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/g,
+    (all, name, equals, dq, sq, bare) => {
+      const value = dq ?? sq ?? bare;
+      if (!CJK_CHAR.test(value)) return all;
+      const quote = dq != null ? '"' : sq != null ? "'" : '';
+      const lower = name.toLowerCase();
+      let next;
+      if (HUMAN_ATTRIBUTES.test(lower)) next = convertHumanText(value, ctx.convert, [P_URL, P_TAG]);
+      else if (lower === 'style') next = convertCss(value, ctx);
+      else if (lower.startsWith('on')) next = transformJs(value, ctx).text;
+      else if (lower.startsWith('data-')) next = protectedConvert(value, inner => convertCodeSegments(inner, ctx), [P_URL, P_TAG]);
+      else return all;
+      return name + equals + quote + next + quote;
+    });
+  return head[0] + rest;
+}
+
+/** HTML 片段（正則 replaceString、程式裡的 HTML 字串）：可見文字照常轉，程式區塊依程式規則轉。 */
+function convertMarkup(text, ctx) {
+  if (typeof text !== 'string' || !CJK_CHAR.test(text)) return text;
+  const store = [];
+  const hold = value => { store.push(value); return '\uE300' + (store.length - 1) + '\uE301'; };
+  let work = text.replace(/<(script|style)\b([^>]*)>([\s\S]*?)(<\/\1\s*>)/gi, (all, name, attrs, inner, close) => {
+    const open = all.slice(0, all.length - inner.length - close.length);
+    const body = name.toLowerCase() === 'script' ? transformJs(inner, ctx).text : convertCss(inner, ctx);
+    return hold(convertTagAttributes(open, ctx) + body + close);
+  });
+  work = work.replace(/<!--[\s\S]*?-->/g, m => hold(ctx.text(m)));
+  work = work.replace(/<\/?[A-Za-z][\w:-]*[^<>]*>/g, tag => hold(convertTagAttributes(tag, ctx)));
+  work = work.replace(/\{\{[^}]*\}\}/g, m => hold(m));
+  work = convertHumanText(work, ctx.convert, [P_URL, P_HEX, P_BRACKET]);
+  for (let guard = 0; guard < 10 && /\uE300\d+\uE301/.test(work); guard++) {
+    work = work.replace(/\uE300(\d+)\uE301/g, (_, k) => store[+k] ?? '');
+  }
+  return work;
+}
+
+/* ---------- 酒館助手（TavernHelper / JS-Slash-Runner）腳本 ----------
+   新版：extensions.tavern_helper = { scripts: [...], variables: {...} }，腳本可以放在資料夾裡；
+   舊版：extensions.TavernHelper_scripts = [...]；也遇過 tavern_helper 被存成 [key, value] 陣列。 */
+function tavernHelperParts(ext) {
+  const parts = { scriptLists: [], variables: [] };
+  if (!ext || typeof ext !== 'object') return parts;
+  const th = ext.tavern_helper;
+  if (Array.isArray(th)) {
+    for (const pair of th) {
+      if (!Array.isArray(pair) || pair.length !== 2) continue;
+      if (pair[0] === 'scripts' && Array.isArray(pair[1])) parts.scriptLists.push(pair[1]);
+      if (pair[0] === 'variables' && pair[1] && typeof pair[1] === 'object') parts.variables.push({ holder: pair, key: 1 });
+    }
+  } else if (th && typeof th === 'object') {
+    if (Array.isArray(th.scripts)) parts.scriptLists.push(th.scripts);
+    if (th.variables && typeof th.variables === 'object') parts.variables.push({ holder: th, key: 'variables' });
+  }
+  if (Array.isArray(ext.TavernHelper_scripts)) parts.scriptLists.push(ext.TavernHelper_scripts);
+  return parts;
+}
+
+/** 攤平成腳本清單（含資料夾內的腳本），驗證、稽核與轉換都用同一份。 */
+function tavernHelperScripts(ext) {
+  const out = [];
+  const walk = list => {
+    for (const item of list || []) {
+      if (!item || typeof item !== 'object') continue;
+      if (Array.isArray(item.scripts)) walk(item.scripts);
+      else out.push(item);
+    }
+  };
+  for (const list of tavernHelperParts(ext).scriptLists) walk(list);
+  return out;
+}
+
+const tavernHelperButtons = script => (Array.isArray(script?.button?.buttons) ? script.button.buttons
+  : Array.isArray(script?.buttons) ? script.buttons : []);
+
+function tavernHelperFolders(ext) {
+  const out = [];
+  const walk = list => {
+    for (const item of list || []) {
+      if (item && typeof item === 'object' && Array.isArray(item.scripts)) { out.push(item); walk(item.scripts); }
+    }
+  };
+  for (const list of tavernHelperParts(ext).scriptLists) walk(list);
+  return out;
+}
+
+/** 腳本程式、說明、自訂資料都要蒐集引用，才能判斷按鈕與設定鍵是不是卡片自己在用。 */
+function collectTavernHelperReferences(ctx, ext) {
+  for (const s of tavernHelperScripts(ext)) if (typeof s.content === 'string') collectCodeReferences(ctx, s.content);
+}
+
+/** 按鈕名與腳本自訂資料的鍵：卡片自己的程式有引用就一起轉，否則屬於外部腳本（例如 MVU），保留原樣。 */
+function planTavernHelperKeeps(ctx, ext) {
+  for (const s of tavernHelperScripts(ext)) {
+    for (const b of tavernHelperButtons(s)) {
+      if (typeof b?.name !== 'string') continue;
+      const restored = canon('buttons', b.name);
+      if (restored) { ctx.keep(restored, '已知由外部腳本監聽的按鈕名稱，必須是簡體'); continue; }
+      if (ctx.isReferenced(b.name)) continue;
+      ctx.keep(b.name, `腳本「${s.name || '未命名'}」的按鈕名稱；卡片內沒有程式引用它，應由外部載入的腳本監聽`);
+    }
+    if (s.data && typeof s.data === 'object' && !Array.isArray(s.data)) {
+      for (const key of Object.keys(s.data)) {
+        if (!ctx.isReferenced(key)) ctx.keep(key, `腳本「${s.name || '未命名'}」的設定鍵；卡片內沒有程式引用它，應由外部載入的腳本讀取`);
+      }
+    }
+  }
+}
+
+/** JSON 形狀的資料（腳本變數、自訂資料）：鍵與字串值依名稱規則轉換，轉完撞名就保留原鍵。 */
+function convertCodeData(value, ctx) {
+  if (typeof value === 'string') return ctx.literal(value);
+  if (Array.isArray(value)) return value.map(v => convertCodeData(v, ctx));
+  if (!value || typeof value !== 'object') return value;
+  const out = {};
+  for (const [key, v] of Object.entries(value)) {
+    let next = ctx.literal(key);
+    if (next !== key && (Object.prototype.hasOwnProperty.call(value, next) || Object.prototype.hasOwnProperty.call(out, next))) next = key;
+    out[next] = convertCodeData(v, ctx);
+  }
+  return out;
+}
+
+function convertTavernHelper(ext, ctx, note, label = '') {
+  for (const folder of tavernHelperFolders(ext)) {
+    if (typeof folder.name === 'string' && folder.name) {
+      const v = ctx.convert(folder.name); note(`${label}腳本資料夾名稱`, folder.name, v); folder.name = v;
+    }
+  }
+  for (const s of tavernHelperScripts(ext)) {
+    const tag = s.name || '未命名';
+    if (typeof s.name === 'string' && s.name) { const v = ctx.convert(s.name); note(`${label}腳本名稱`, s.name, v); s.name = v; }
+    if (typeof s.info === 'string' && s.info) {
+      const v = convertPrompt(s.info, ctx.convert, ctx.languageTarget, ctx); note(`${label}腳本「${tag}」說明`, s.info, v); s.info = v;
+    }
+    if (typeof s.content === 'string' && s.content) {
+      const v = transformJs(s.content, ctx).text; note(`${label}腳本「${tag}」程式`, s.content, v); s.content = v;
+    }
+    for (const b of tavernHelperButtons(s)) {
+      if (typeof b?.name !== 'string' || !b.name) continue;
+      const restored = canon('buttons', b.name);
+      const v = restored || (ctx.keptFor(b.name) ?? ctx.literal(b.name));
+      note(restored ? `${label}按鈕名稱（還原）` : `${label}按鈕名稱`, b.name, v);
+      b.name = v;
+    }
+    if (s.data && typeof s.data === 'object' && !Array.isArray(s.data)) {
+      const out = {};
+      for (const [key, value] of Object.entries(s.data)) {
+        if (ctx.keptFor(key) != null) { out[key] = value; continue; }
+        out[ctx.literal(key)] = convertCodeData(value, ctx);
+      }
+      if (JSON.stringify(out) !== JSON.stringify(s.data)) note(`${label}腳本「${tag}」自訂資料`, JSON.stringify(s.data), JSON.stringify(out));
+      s.data = out;
+    }
+  }
+  for (const { holder, key } of tavernHelperParts(ext).variables) {
+    const before = JSON.stringify(holder[key]);
+    holder[key] = convertCodeData(holder[key], ctx);
+    const after = JSON.stringify(holder[key]);
+    if (before !== after) note(`${label}腳本變數`, before, after);
+  }
+}
+
+/**
+ * 轉換後的最後一道防線：把整份輸出（包含不認得的外掛附件）掃一遍，
+ * 找出仍會被轉換、卻不屬於刻意保留項目的文字，列進校對報告，不讓任何東西被默默漏掉。
+ */
+function findUnconvertedText(doc, convert, ctx) {
+  const rows = [];
+  const residual = text => {
+    let rest = String(text).replace(P_URL, ' ').replace(AMBIGUITY_RE, ' ');
+    if (ctx) {
+      rest = rest.split(CODE_SEGMENT_SPLIT)
+        .map((part, k) => (k % 2 === 0 && CJK_CHAR.test(part) && (ctx.keptFor(part) != null || isCjkFontName(part)) ? ' ' : part))
+        .join('');
+      rest = rest.replace(/font(?:-family)?\s*:[^;{}]*/gi, ' ');
+    }
+    return rest;
+  };
+  const check = (text, path) => {
+    if (!CJK_CHAR.test(text)) return;
+    const rest = residual(text);
+    if (!CJK_CHAR.test(rest)) return;
+    const after = convert(rest);
+    if (after === rest) return;
+    const a = [...rest], b = [...after];
+    const at = a.findIndex((ch, k) => ch !== b[k]);
+    rows.push({ path, sample: a.slice(Math.max(0, at - 12), at + 18).join('').replace(/\s+/g, ' ').trim() });
+  };
+  const walk = (value, path) => {
+    if (typeof value === 'string') return check(value, path);
+    if (Array.isArray(value)) return value.forEach((v, i) => walk(v, `${path}[${i}]`));
+    if (!value || typeof value !== 'object') return;
+    for (const [key, v] of Object.entries(value)) {
+      check(key, `${path}.${key}（鍵名）`);
+      walk(v, path ? `${path}.${key}` : key);
+    }
+  };
+  walk(doc, '');
+  return rows;
+}
+
+const LEFTOVER_PLACES = [
+  [/tavern_helper|TavernHelper_scripts/, '酒館助手腳本'],
+  [/regex_scripts|\.regex\b|SPreset/, '正則腳本'],
+  [/character_book/, '世界書'],
+  [/^(?:data\.)?extensions\.([^.[]+)/, m => `附件 extensions.${m[1]}`],
+];
+
+function describeLeftoverPath(path) {
+  for (const [re, label] of LEFTOVER_PLACES) {
+    const m = path.match(re);
+    if (m) return typeof label === 'function' ? label(m) : label;
+  }
+  return path.replace(/\[\d+\]/g, '').replace(/^data\./, '') || '（根）';
+}
+
+/** 把殘留文字與刻意保留的名稱整理成校對報告項目。 */
+function leftoverIssues(rows, ctx) {
+  const issues = [];
+  const groups = new Map();
+  for (const row of rows) {
+    const label = describeLeftoverPath(row.path);
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(row);
+  }
+  for (const [label, list] of groups) {
+    const known = !label.startsWith('附件 ');
+    const samples = list.slice(0, 4).map(r => `「${r.sample}」（${r.path.replace(/^data\./, '')}）`).join('、');
+    issues.push({
+      level: 'warn',
+      title: `${label}中仍有 ${list.length} 處文字沒有轉換`,
+      detail: (known
+        ? '這些文字的繁簡和其他地方不一致，可能讓變數、按鈕或比對失效。'
+        : '這是本工具還不認得的外掛附件；為了避免弄壞外掛設定，這裡保留原樣，請自行確認是否需要轉換。')
+        + ` 例如：${samples}${list.length > 4 ? ' 等' : ''}`,
+    });
+  }
+  if (ctx?.keptLog?.length) {
+    const byReason = new Map();
+    for (const { name, reason } of ctx.keptLog) {
+      if (!byReason.has(reason)) byReason.set(reason, []);
+      byReason.get(reason).push(name);
+    }
+    for (const [reason, names] of byReason) {
+      issues.push({
+        level: 'info',
+        title: `刻意保留 ${names.length} 個名稱：${names.slice(0, 3).join('、')}${names.length > 3 ? ' 等' : ''}`,
+        detail: `${reason}。若改成其他字形，名稱就對不上，功能會失效。完整清單：${names.join('、')}`,
+      });
+    }
+  }
+  return issues;
+}
+
+/** 轉換前先看過整張卡：誰引用了哪些名稱、哪些名稱的意義由卡片外決定。 */
+function prepareCardCodeContext(ctx, card, kindOf) {
+  const data = card.data || card;
+  const exts = [...new Set([data.extensions, card.extensions].filter(Boolean))];
+  const markup = [];
+  for (const obj of [card, card.data].filter(Boolean)) {
+    for (const k of CARD_TEXT_FIELDS) if (typeof obj[k] === 'string') markup.push(obj[k]);
+    for (const k of ['alternate_greetings', 'group_only_greetings']) if (Array.isArray(obj[k])) markup.push(...obj[k].filter(v => typeof v === 'string'));
+  }
+  for (const e of data.character_book?.entries || []) if (typeof e.content === 'string') markup.push(e.content);
+  for (const ext of exts) {
+    for (const r of ext.regex_scripts || []) if (typeof r?.replaceString === 'string') markup.push(r.replaceString);
+    for (const sc of tavernHelperScripts(ext)) if (typeof sc.content === 'string') markup.push(sc.content);
+    collectTavernHelperReferences(ctx, ext);
+  }
+  for (const text of markup) {
+    let m;
+    const blocks = /<script\b[^>]*>([\s\S]*?)<\/script\s*>|\son[a-z]+\s*=\s*(["'])([\s\S]*?)\2/gi;
+    while ((m = blocks.exec(text))) collectCodeReferences(ctx, m[1] ?? m[3]);
+    collectMarkupNames(ctx, text);
+  }
+  (data.character_book?.entries || []).forEach((e, idx) => {
+    if (kindOf(e, idx) !== 'data') return;
+    const nf = entryNameField(e);
+    ctx.keep(canon('entryNames', e[nf]) || e[nf], '資料條目名稱，腳本靠這個名字找條目');
+    for (const line of String(e.content || '').split('\n')) {
+      const kv = line.match(RE_KV);
+      if (kv) {
+        ctx.keep(canon('keys', kv[1]) || kv[1], '資料條目的鍵名，腳本靠這個名字讀設定');
+        if (isMachineValueKey(kv[1])) ctx.keep(kv[2].trim(), '資料條目的程式比對值');
+        continue;
+      }
+      const sec = line.match(RE_SECTION);
+      if (sec && canon('sections', sec[1])) ctx.keep(canon('sections', sec[1]), '資料條目的區段名稱');
+    }
+  });
+  for (const ext of exts) planTavernHelperKeeps(ctx, ext);
+  return ctx;
+}
+
+const CARD_TEXT_FIELDS = ['name', 'nickname', 'description', 'personality', 'scenario', 'first_mes', 'mes_example',
+  'system_prompt', 'post_history_instructions', 'creator_notes', 'creatorcomment', 'creator'];
 
 /**
  * 主轉換。opts = { convert, doRegex, languageTarget }
@@ -1412,22 +1972,38 @@ function convertCard(cardIn, opts) {
   const note = (where, before, after) => { if (before !== after) changed.push({ where, before, after }); };
 
   const data = card.data || card;
-  const PLAIN = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example',
-                 'system_prompt', 'post_history_instructions', 'creator_notes', 'creator'];
+  const ctx = prepareCardCodeContext(createCodeContext(convert, { languageTarget }), card, kindOf);
+  const exts = [...new Set([data.extensions, card.extensions].filter(Boolean))];
 
   for (const obj of [card, card.data].filter(Boolean)) {
-    for (const k of PLAIN) {
+    for (const k of CARD_TEXT_FIELDS) {
       if (typeof obj[k] === 'string' && obj[k]) {
-        const v = convertPrompt(obj[k], convert, languageTarget);
+        const v = convertPrompt(obj[k], convert, languageTarget, ctx);
         note(k, obj[k], v); obj[k] = v;
       }
     }
-    if (Array.isArray(obj.alternate_greetings)) {
-      obj.alternate_greetings = obj.alternate_greetings.map((g, i) => {
-        const v = convertPrompt(g, convert, languageTarget); note(`開場白 ${i + 1}`, g, v); return v;
+    for (const [k, label] of [['alternate_greetings', '開場白'], ['group_only_greetings', '群聊開場白']]) {
+      if (!Array.isArray(obj[k])) continue;
+      obj[k] = obj[k].map((g, i) => {
+        if (typeof g !== 'string') return g;
+        const v = convertPrompt(g, convert, languageTarget, ctx); note(`${label} ${i + 1}`, g, v); return v;
       });
     }
-    if (Array.isArray(obj.tags)) obj.tags = obj.tags.map(convert);
+    if (obj.creator_notes_multilingual && typeof obj.creator_notes_multilingual === 'object') {
+      for (const [lang, text] of Object.entries(obj.creator_notes_multilingual)) {
+        if (typeof text !== 'string' || !text) continue;
+        const v = convertPrompt(text, convert, languageTarget, ctx);
+        note(`作者備註（${lang}）`, text, v); obj.creator_notes_multilingual[lang] = v;
+      }
+    }
+    if (Array.isArray(obj.tags)) obj.tags = obj.tags.map(t => (typeof t === 'string' ? convert(t) : t));
+  }
+  // 角色備註（Author's Note 深度提示）是給 AI 讀的提示詞
+  for (const ext of exts) {
+    const dp = ext.depth_prompt;
+    if (dp && typeof dp.prompt === 'string' && dp.prompt) {
+      const v = convertPrompt(dp.prompt, convert, languageTarget, ctx); note('角色備註（深度提示）', dp.prompt, v); dp.prompt = v;
+    }
   }
 
   const book = data.character_book;
@@ -1476,7 +2052,7 @@ function convertCard(cardIn, opts) {
             return line;
           }).join('\n');
         } else {
-          v = convertPrompt(e.content, convert, languageTarget);
+          v = convertPrompt(e.content, convert, languageTarget, ctx);
         }
         note(`條目內容「${e[nf]}」`, e.content, v);
         e.content = v;
@@ -1493,25 +2069,18 @@ function convertCard(cardIn, opts) {
     });
   }
 
-  // 腳本：程式碼一律不動，只還原按鈕名
-  const th = data.extensions?.tavern_helper;
-  if (th?.scripts) for (const s of th.scripts) {
-    if (s.name) { const v = convert(s.name); note('腳本名稱', s.name, v); s.name = v; }
-    if (s.info) { const v = convertPrompt(s.info, convert, languageTarget); note('腳本說明', s.info, v); s.info = v; }
-    for (const b of s.button?.buttons || []) {
-      const rev = canon('buttons', b.name);
-      if (rev) { note('按鈕名稱（還原）', b.name, rev); b.name = rev; }
-    }
-  }
+  // 酒館助手腳本：程式碼跟世界書、正則用同一套規則轉換；外部腳本監聽的名稱保留
+  for (const ext of exts) convertTavernHelper(ext, ctx, note);
 
   // 正則：可選
-  if (opts.doRegex && data.extensions?.regex_scripts) {
-    const convertedRegex = convertRegexFile(data.extensions.regex_scripts, { convert });
-    data.extensions.regex_scripts = convertedRegex.list;
+  for (const ext of exts) {
+    if (!opts.doRegex || !Array.isArray(ext.regex_scripts)) continue;
+    const convertedRegex = convertRegexFile(ext.regex_scripts, { convert, codeCtx: ctx });
+    ext.regex_scripts = convertedRegex.list;
     convertedRegex.changed.forEach(item => note(`內嵌正則｜${item.where}`, item.before, item.after));
   }
 
-  return { card, changed };
+  return { card, changed, codeCtx: ctx };
 }
 
 /**
@@ -1678,8 +2247,8 @@ function validate(card, kindOf) {
   }
 
   /* 9. 按鈕名稱是繁體 */
-  for (const s of data.extensions?.tavern_helper?.scripts || []) {
-    for (const b of s.button?.buttons || []) {
+  for (const s of tavernHelperScripts(data.extensions)) {
+    for (const b of tavernHelperButtons(s)) {
       const cb = canon('buttons', b.name);
       if (cb) {
         add('error', '腳本按鈕名稱是繁體，按了不會有反應',
@@ -1796,8 +2365,8 @@ function autofix(cardIn, which, kindOf) {
   }
 
   if (which.button) {
-    for (const s of data.extensions?.tavern_helper?.scripts || []) {
-      for (const b of s.button?.buttons || []) {
+    for (const s of tavernHelperScripts(data.extensions)) {
+      for (const b of tavernHelperButtons(s)) {
         const c = canon('buttons', b.name);
         if (c) { done.push(`按鈕 ${b.name} → ${c}`); b.name = c; }
       }
@@ -1865,6 +2434,7 @@ function convertMarkupHumanAttributes(text, convert) {
 function convertRegexFile(listIn, opts) {
   const list = JSON.parse(JSON.stringify(listIn));
   const convert = opts.convert;
+  const ctx = opts.codeCtx || prepareRegexCodeContext(createCodeContext(convert), list);
   const changed = [];
   const note = (where, before, after) => { if (before !== after) changed.push({ where, before, after }); };
 
@@ -1874,13 +2444,16 @@ function convertRegexFile(listIn, opts) {
       const v = convert(r.scriptName);                       // 顯示名稱，酒館靠 id 配對，轉了安全
       note(`${tag}｜腳本名稱`, r.scriptName, v); r.scriptName = v;
     }
-    for (const f of ['findRegex', 'replaceString']) {
-      if (typeof r[f] === 'string' && r[f]) {
-        const withHumanAttributes = convertMarkupHumanAttributes(r[f], convert);
-        const v = protectedConvert(withHumanAttributes,
-          value => repairConverterBoundaryMisses(convert(value), convert), RX_PROTECT);
-        note(`${tag}｜${f}`, r[f], v); r[f] = v;
-      }
+    if (typeof r.findRegex === 'string' && r.findRegex) {
+      const withHumanAttributes = convertMarkupHumanAttributes(r.findRegex, convert);
+      const v = protectedConvert(withHumanAttributes,
+        value => repairConverterBoundaryMisses(convert(value), convert), RX_PROTECT);
+      note(`${tag}｜findRegex`, r.findRegex, v); r.findRegex = v;
+    }
+    // 取代內容常是一整頁 HTML：可見文字照常轉，<script>／<style> 依程式規則轉，class／id 保留
+    if (typeof r.replaceString === 'string' && r.replaceString) {
+      const v = convertMarkup(r.replaceString, ctx);
+      note(`${tag}｜replaceString`, r.replaceString, v); r.replaceString = v;
     }
     if (Array.isArray(r.trimStrings)) {
       r.trimStrings = r.trimStrings.map((s, j) => {
@@ -1893,7 +2466,19 @@ function convertRegexFile(listIn, opts) {
       });
     }
   });
-  return { list, changed };
+  return { list, changed, codeCtx: ctx };
+}
+
+function prepareRegexCodeContext(ctx, list) {
+  for (const r of list || []) {
+    const text = r?.replaceString;
+    if (typeof text !== 'string') continue;
+    let m;
+    const blocks = /<script\b[^>]*>([\s\S]*?)<\/script\s*>|\son[a-z]+\s*=\s*(["'])([\s\S]*?)\2/gi;
+    while ((m = blocks.exec(text))) collectCodeReferences(ctx, m[1] ?? m[3]);
+    collectMarkupNames(ctx, text);
+  }
+  return ctx;
 }
 
 /** 正則檔的校對。重點是「轉換後還是不是一條能用的正則」。 */
@@ -2004,26 +2589,34 @@ function convertPreset(presetIn, opts) {
   const languageTarget = opts.languageTarget || null;
   const changed = [];
   const note = (w, a, b) => { if (a !== b) changed.push({ where: w, before: a, after: b }); };
+  const ctx = createCodeContext(convert, { languageTarget });
+  for (const collection of presetRegexCollections(p)) prepareRegexCodeContext(ctx, collection.list);
+  for (const pr of presetPrompts(p)) if (typeof pr.content === 'string') collectMarkupNames(ctx, pr.content);
+  if (p.extensions) {
+    collectTavernHelperReferences(ctx, p.extensions);
+    for (const sc of tavernHelperScripts(p.extensions)) collectMarkupNames(ctx, sc.content);
+    planTavernHelperKeeps(ctx, p.extensions);
+  }
 
   for (const f of PRESET_TEXT_FIELDS) {
     if (typeof p[f] === 'string' && p[f]) {
-      const v = convertPrompt(p[f], convert, languageTarget); note(f, p[f], v); p[f] = v;
+      const v = convertPrompt(p[f], convert, languageTarget, ctx); note(f, p[f], v); p[f] = v;
     }
   }
   for (const pr of presetPrompts(p)) {
     for (const field of PRESET_PROMPT_TITLE_FIELDS) {
       if (typeof pr[field] !== 'string' || !pr[field]) continue;
-      const v = convertPrompt(pr[field], convert, languageTarget);
+      const v = convertPrompt(pr[field], convert, languageTarget, ctx);
       note(`提示詞標題（${field}）`, pr[field], v); pr[field] = v;
     }
     if (typeof pr.content === 'string' && pr.content) {
-      const v = convertPrompt(pr.content, convert, languageTarget);
+      const v = convertPrompt(pr.content, convert, languageTarget, ctx);
       note(`「${presetPromptTitle(pr)}」內容`, pr.content, v); pr.content = v;
     }
   }
   for (const group of presetDisplayGroups(p)) {
     if (typeof group.name !== 'string' || !group.name) continue;
-    const v = convertPrompt(group.name, convert, languageTarget);
+    const v = convertPrompt(group.name, convert, languageTarget, ctx);
     note('提示詞分組名稱', group.name, v); group.name = v;
   }
   const identifierMap = presetIdentifierConversionMap(p, convert);
@@ -2043,12 +2636,13 @@ function convertPreset(presetIn, opts) {
   }
   if (opts.doRegex) {
     for (const collection of presetRegexCollections(p)) {
-      const r = convertRegexFile(collection.list, { convert });
+      const r = convertRegexFile(collection.list, { convert, codeCtx: ctx });
       p.extensions[collection.key] = r.list;
       r.changed.forEach(x => note(`內嵌正則｜${x.where}`, x.before, x.after));
     }
   }
-  return { preset: p, changed };
+  if (p.extensions) convertTavernHelper(p.extensions, ctx, note, '預設');
+  return { preset: p, changed, codeCtx: ctx };
 }
 
 function validatePreset(p) {
@@ -2245,7 +2839,7 @@ function auditDoc(doc, kind) {
   };
 
   /* --- 腳本：風險最高 --- */
-  for (const s of data.extensions?.tavern_helper?.scripts || []) {
+  for (const s of tavernHelperScripts(data.extensions)) {
     const w = `腳本「${s.name}」`;
     addScan(s.content || '', w);
     // 遠端載入的程式碼無法被靜態檢查
@@ -2323,7 +2917,7 @@ globalThis.STProofreadingCore = Object.freeze({
   entryNameField, entryLabel, scanEntryAmbiguities,
   protectEntryAmbiguities, restoreEntryAmbiguities,
   classifyEntry, convertCard, convertPreset, convertRegexFile,
-  retargetLanguageDirectives, validate,
+  retargetLanguageDirectives, validate, tavernHelperScripts, findUnconvertedText, leftoverIssues,
 });
 
 </script>
@@ -4050,6 +4644,7 @@ async function run() {
     else say('沒有套用任何修正（未勾選，或這個檔案沒有這些問題）。');
 
     let changedCount = 0;
+    let codeCtx = null, leftoverConvert = null;
     if (dir.from) {
       say('準備 OpenCC 詞庫…');
       const OC = await loadOpenCC();
@@ -4062,12 +4657,14 @@ async function run() {
       if (isRegex) {
         const r2 = convertRegexFile(doc, { convert });
         doc = r2.list;
+        codeCtx = r2.codeCtx;
         changedCount = r2.changed.length;
         say(`${what}：${r2.changed.length} 處文字有變動`);
         say('已保護 {{巨集}}、HTML 標籤、網址與色碼不被轉換');
       } else if (isPreset) {
         const r2 = convertPreset(doc, { convert, doRegex: $('#doRegex').checked, languageTarget });
         doc = r2.preset;
+        codeCtx = r2.codeCtx;
         changedCount = r2.changed.length;
         say(`${what}：${r2.changed.length} 處文字有變動`);
         say(`已同步檢查 ${(doc.prompts || []).length} 個提示詞 identifier 與整份順序清單；有繁簡變化時成套改名，撞名則保留`);
@@ -4076,12 +4673,17 @@ async function run() {
         const ambiguityStash = protectEntryAmbiguities(doc, S.decisions, safeConvert);
         const r2 = convertCard(doc, { convert, doRegex: $('#doRegex').checked, kindOf, languageTarget });
         doc = r2.card;
+        codeCtx = r2.codeCtx;
         restoreEntryAmbiguities(doc, ambiguityStash);
         changedCount = r2.changed.length;
         say(`${what}：${r2.changed.length} 處文字有變動`);
         say(`已保護 ${S.kinds.filter(k => k === 'data').length} 個資料條目的名稱與鍵名不被轉換`);
         if (S.ambiguities.length) say(`已逐一保護 ${S.ambiguities.length} 個疑義詞位置，套用 ${S.decisions.size} 個人工決定`);
       }
+      leftoverConvert = convert;
+      const scripts = isRegex ? 0 : tavernHelperScripts((doc.data || doc).extensions).length;
+      if (scripts) say(`已用同一套規則轉換 ${scripts} 個酒館助手腳本的程式碼（變數名、字串、註解）`);
+      if (codeCtx?.keptLog.length) say(`刻意保留 ${codeCtx.keptLog.length} 個由卡片外部決定的名稱（按鈕、設定鍵、class 等），詳見校對報告`);
       if (languageTarget === 'traditional') say('已同步調整輸出語言指示：簡體中文／zh-CN → 繁體中文／zh-TW');
       if (languageTarget === 'simplified') say('已同步調整輸出語言指示：繁體中文／zh-TW → 簡體中文／zh-CN');
     } else {
@@ -4102,6 +4704,12 @@ async function run() {
     const after = isRegex ? validateRegexFile(doc).issues
                 : isPreset ? validatePreset(doc).issues
                 : validate(doc, kindOf).issues;
+    if (leftoverConvert) {
+      const extra = leftoverIssues(findUnconvertedText(doc, leftoverConvert, codeCtx), codeCtx);
+      after.push(...extra);
+      const missed = extra.filter(i => i.level === 'warn').length;
+      say(missed ? `⚠ 有 ${missed} 處附件還留著沒轉換的文字，已列在校對報告` : '✓ 已掃過整份檔案（含附件），沒有遺漏的文字');
+    }
     const left = after.filter(i => i.level === 'error').length;
     say(left ? `⚠ 仍有 ${left} 個功能失效問題未解決` : '✓ 已無功能失效問題');
 
