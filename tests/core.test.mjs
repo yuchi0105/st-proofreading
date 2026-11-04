@@ -339,6 +339,43 @@ test('TavernHelper scripts convert with the worldbook while external names stay 
   assert.ok(issues.some(i => i.level === 'info' && i.detail.includes('重新处理变量')));
 });
 
+test('Chinese fill-in macros convert whole, including nested {{user}}, while named macros stay', () => {
+  const context = makeContext();
+  vm.runInContext(scripts[2], context, { filename: 'opencc-bundle.js' });
+  const core = context.STProofreadingCore;
+  const convert = context.OpenCC.Converter({ from: 'cn', to: 'tw' });
+  const card = { data: {
+    name: '测试',
+    character_book: { entries: [{
+      comment: '状态栏',
+      keys: [],
+      content: '欲望：{{0~100的整数，象征着欲望；要么找{{user}},若未征得同意则拒绝}}\n'
+        + '关系：{{简短命名，表示角色与{{user}}之间的关系}}\n'
+        + '多行：{{第一行说明\n第二行说明}}\n'
+        + '冒号：{{格式: 简短描述}}\n'
+        + '注释：{{// 这里是注释}}\n'
+        + '随机：{{random:红色,蓝色}} {{pick::早上::晚上}}\n'
+        + '变量：{{setvar::亲密状态::很高}}\n'
+        + '保留：{{user}} {{char}} {{roll:1d20}}',
+    }] },
+    extensions: { regex_scripts: [{ scriptName: '状态', findRegex: '/状态/g',
+      replaceString: '<div>好感：{{getvar::亲密状态}}，{{说明文字}}</div>' }] },
+  } };
+  const out = core.convertCard(card, { convert, doRegex: true, kindOf: () => 'prompt' }).card;
+  const content = out.data.character_book.entries[0].content;
+
+  assert.match(content, /\{\{0~100的整數，象徵著慾望；要麼找\{\{user\}\},若未徵得同意則拒絕\}\}/);
+  assert.match(content, /\{\{簡短命名，表示角色與\{\{user\}\}之間的關係\}\}/);
+  assert.match(content, /\{\{第一行說明\n第二行說明\}\}/);
+  assert.match(content, /\{\{格式: 簡短描述\}\}/);
+  assert.match(content, /\{\{\/\/ 這裡是註釋\}\}/);
+  assert.match(content, /\{\{random:紅色,藍色\}\} \{\{pick::早上::晚上\}\}/);
+  assert.match(content, /\{\{setvar::親密狀態::很高\}\}/);
+  assert.match(content, /保留：\{\{user\}\} \{\{char\}\} \{\{roll:1d20\}\}/);
+  assert.equal(out.data.extensions.regex_scripts[0].replaceString, '<div>好感：{{getvar::親密狀態}}，{{說明文字}}</div>');
+  assert.equal([...core.findUnconvertedText(out, convert, null)].length, 0);
+});
+
 test('standalone worldbook keeps disable semantics and every unknown field', () => {
   const { STProofreadingCore: core } = makeContext();
   const original = fixture('standalone-worldbook.json');

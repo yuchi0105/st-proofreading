@@ -1297,6 +1297,40 @@ function transformTopLevelMacroOptions(text, transformValue) {
   return out + transformValue(text.slice(start));
 }
 
+/** 從 start 的 {{ 找到配對的 }}（允許 {{user}} 等巢狀巨集），回傳結尾位置；未閉合回傳 -1。 */
+function macroEnd(text, start) {
+  let depth = 1;
+  let scan = start + 2;
+  while (depth > 0) {
+    const nextOpen = text.indexOf('{{', scan);
+    const nextClose = text.indexOf('}}', scan);
+    if (nextClose < 0) return -1;
+    if (nextOpen >= 0 && nextOpen < nextClose) {
+      depth++;
+      scan = nextOpen + 2;
+    } else {
+      depth--;
+      scan = nextClose + 2;
+    }
+  }
+  return scan;
+}
+
+/** 把最外層的每個 {{…}} 交給 replace；巢狀的整段算一個，不會在內層 }} 被切斷。 */
+function replaceTopLevelMacros(text, replace) {
+  let out = '';
+  let cursor = 0;
+  while (cursor < text.length) {
+    const start = text.indexOf('{{', cursor);
+    if (start < 0) break;
+    const end = macroEnd(text, start);
+    if (end < 0) break;
+    out += text.slice(cursor, start) + replace(text.slice(start, end));
+    cursor = end;
+  }
+  return out + text.slice(cursor);
+}
+
 /** 一般提示詞文字 */
 function transformVariableMacros(text, transformIdentifier, transformValue) {
   if (typeof text !== 'string' || !text.includes('{{')) return text;
@@ -1307,31 +1341,14 @@ function transformVariableMacros(text, transformIdentifier, transformValue) {
     const start = text.indexOf('{{', cursor);
     if (start < 0) return out + text.slice(cursor);
     out += text.slice(cursor, start);
-
-    // 找到與目前 {{ 配對的 }}；允許 value 內含 {{user}} 等巢狀巨集。
-    let depth = 1;
-    let scan = start + 2;
-    let end = -1;
-    while (depth > 0) {
-      const nextOpen = text.indexOf('{{', scan);
-      const nextClose = text.indexOf('}}', scan);
-      if (nextClose < 0) break;
-      if (nextOpen >= 0 && nextOpen < nextClose) {
-        depth++;
-        scan = nextOpen + 2;
-      } else {
-        depth--;
-        scan = nextClose + 2;
-        if (depth === 0) end = scan;
-      }
-    }
+    const end = macroEnd(text, start);
     if (end < 0) return out + text.slice(start); // 未閉合：保守地保持原文
 
     const full = text.slice(start, end);
     const body = full.slice(2, -2);
     const writable = body.match(/^(\s*(?:setvar|setglobalvar|addvar|addglobalvar)\s*::\s*)([^:\r\n{}]+?)(\s*::)([\s\S]*)$/i);
     const reference = body.match(/^(\s*(?:getvar|getglobalvar|incvar|incglobalvar|decvar|decglobalvar)\s*::\s*)([^:\r\n{}]+?)(\s*)$/i);
-    const random = body.match(/^(\s*random\s*::)([\s\S]*)$/i);
+    const random = body.match(/^(\s*(?:random|pick)\s*::?)([\s\S]*)$/i);
     const bare = body.match(/^(\s*)([^:{}\r\n]+?)(\s*)$/);
     if (writable) {
       // 同步轉換變數名稱與 value；所有分組原樣接回，不得 trim 任何空白。
@@ -1345,6 +1362,10 @@ function transformVariableMacros(text, transformIdentifier, transformValue) {
     } else if (bare && /[\u3400-\u9FFF]/.test(bare[2])) {
       // {{小剧场名字}} 這類純中文 placeholder 在各處同步繁化；內建 ASCII 巨集不受影響。
       out += '{{' + bare[1] + transformIdentifier(bare[2]) + bare[3] + '}}';
+    } else if (/[\u3400-\u9FFF]/.test(body) && !/^\s*[#\/]?[A-Za-z_][\w.-]*(?=\s|:|$)/.test(body)) {
+      // {{0~100的整数，…要么找{{user}}…}} 這類給 AI 的中文填空說明：整段是自然語句，
+      // 連同內層巨集一起轉換（{{user}} 本身仍原樣保留）。
+      out += '{{' + transformValue(body) + '}}';
     } else {
       // 未知外層巨集保持原樣，但仍遞迴處理其中明確可辨識的變數巨集。
       out += '{{' + transformVariableMacros(body, transformIdentifier, transformValue) + '}}';
@@ -1392,8 +1413,15 @@ function convertPrompt(text, convert, languageTarget, codeCtx) {
     identifier => convert(identifier),
     value => convertPrompt(value, convert, languageTarget, ctx),
   );
-  const withConvertedPromptTags = transformPromptTags(withConvertedValues, convert, ctx);
-  const converted = convertHumanText(withConvertedPromptTags, convert, [P_URL, P_HEX, P_BRACKET, P_TAG], languageTarget);
+  // 巨集內容已在上一步依規則處理；整段收起來，避免後面的通用轉換在巢狀的 }} 處切開又轉一次。
+  const macros = [];
+  const held = replaceTopLevelMacros(withConvertedValues, macro => {
+    macros.push(macro);
+    return '\uE500' + (macros.length - 1) + '\uE501';
+  });
+  const withConvertedPromptTags = transformPromptTags(held, convert, ctx);
+  let converted = convertHumanText(withConvertedPromptTags, convert, [P_URL, P_HEX, P_BRACKET, P_TAG], languageTarget);
+  if (macros.length) converted = converted.replace(/\uE500(\d+)\uE501/g, (_, k) => macros[+k]);
   return blocks.length ? converted.replace(/\uE400(\d+)\uE401/g, (_, k) => blocks[+k]) : converted;
 }
 
@@ -1690,7 +1718,10 @@ function convertMarkup(text, ctx) {
   });
   work = work.replace(/<!--[\s\S]*?-->/g, m => hold(ctx.text(m)));
   work = work.replace(/<\/?[A-Za-z][\w:-]*[^<>]*>/g, tag => hold(convertTagAttributes(tag, ctx)));
-  work = work.replace(/\{\{[^}]*\}\}/g, m => hold(m));
+  // {{getvar::变量}} 等巨集跟世界書用同一套規則，變數名稱才會一致
+  work = transformVariableMacros(work, id => ctx.convert(id),
+    value => convertPrompt(value, ctx.convert, ctx.languageTarget, ctx));
+  work = replaceTopLevelMacros(work, hold);
   work = convertHumanText(work, ctx.convert, [P_URL, P_HEX, P_BRACKET]);
   for (let guard = 0; guard < 10 && /\uE300\d+\uE301/.test(work); guard++) {
     work = work.replace(/\uE300(\d+)\uE301/g, (_, k) => store[+k] ?? '');
